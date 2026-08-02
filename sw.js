@@ -1,6 +1,10 @@
 // sw.js — offline support. App shell is precached; fonts cached on first use.
 // Audio never touches the network: it lives in IndexedDB.
-const CACHE = 'bmt-v4';
+const CACHE = 'bmt-v5';
+
+self.addEventListener('message', e => {
+  if (e.data === 'skipWaiting') self.skipWaiting();
+});
 const SHELL = [
   './',
   './index.html',
@@ -39,8 +43,19 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Shell: cache-first, network fallback (so updates arrive when online)
+  // Shell: network-first, cache fallback. Cache-first left users stranded on a
+  // stale build — an iOS home-screen app resumed from the switcher never
+  // navigates, so a new worker never installs and the old HTML/JS lives on.
+  // Still fully offline: any network failure falls straight back to the cache.
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        if (res && res.ok && e.request.method === 'GET') {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request).then(hit => hit || caches.match('./index.html')))
   );
 });

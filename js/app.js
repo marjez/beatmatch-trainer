@@ -729,6 +729,39 @@ $('menuBtn').addEventListener('click', () => openSheet(true));
 $('sheetClose').addEventListener('click', () => openSheet(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(false); });
 
+// ---------- Service worker ----------
+// Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
+// is answerable from the phone instead of guessed at.
+const APP_BUILD = 'bmt-v5';
+
+function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+    .then(reg => {
+      reg.update().catch(() => {});
+      // Resuming an iOS home-screen app doesn't navigate, so nothing would
+      // otherwise check for a new build.
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) reg.update().catch(() => {});
+      });
+      $('forceUpdate').addEventListener('click', async () => {
+        try {
+          await reg.update();
+          const waiting = reg.waiting || reg.installing;
+          if (waiting) { toast('New build found — reloading…'); waiting.postMessage('skipWaiting'); }
+          else toast(`You're on the latest build (${APP_BUILD}).`);
+        } catch { toast('Could not reach the network to check.'); }
+      });
+    })
+    .catch(() => {});
+}
+
 // ---------- Init ----------
 async function init() {
   db.requestPersistence();
@@ -752,8 +785,7 @@ async function init() {
   if (canStart()) startRound();
   // An empty mixer has no visible way in, so show the crate on first run.
   if (!tracks.length) openSheet(true);
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  }
+  $('buildStamp').textContent = `build ${APP_BUILD}`;
+  registerSW();
 }
 init();
