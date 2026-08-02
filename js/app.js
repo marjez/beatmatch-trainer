@@ -16,9 +16,11 @@ let difficulty = 'easy';
 let round = null;           // {aIdx, bIdx, hidden, r0}
 let fader = 0;
 let nudge = 0;
+let split = false;          // headphone split: A hard left, B hard right
+let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
 const decks = {
-  A: { source: null, gain: null, playing: false },
-  B: { source: null, gain: null, playing: false },
+  A: { source: null, gain: null, panner: null, playing: false },
+  B: { source: null, gain: null, panner: null, playing: false },
 };
 let sessionHistory = [];
 
@@ -43,13 +45,44 @@ function ensureCtx() {
   return ctx;
 }
 function bpmFromName(name) {
-  const m = name.match(/(\d{2,3})(?:\.\d+)?\s*bpm/i);
+  // Capture the decimals too — Rekordbox analyses to ~126.02, and dropping the
+  // fraction skews r0 in two-track mode by enough to hear.
+  const m = name.match(/(\d{2,3}(?:\.\d+)?)\s*bpm/i);
   if (m) { const v = parseFloat(m[1]); if (v >= 60 && v <= 200) return v; }
   return null;
 }
 
 // ---------- BPM detection ----------
+// Filename BPM (Rekordbox export) is always preferred; this only runs when a
+// track arrives untagged. web-audio-beat-detector does the real work — the
+// homegrown lowpass histogram below is kept purely as a last resort, since it
+// gives up on anything with a soft or sidechained kick.
+// The range must span LESS than one octave, or a tempo has two valid
+// representations inside it and the detector is free to pick the wrong one
+// (measured: at 85–175 a 174 BPM track came back as 87). 80×2 = 160 > 159, so
+// every tempo folds to exactly one value.
+// 80–159 is chosen to hold both crates the owner trains on: hip-hop from 80 and
+// house/techno to 159. The cost is that anything at 160+ (drum & bass, hard
+// techno) folds to half-time — if that ever matters, it needs a per-crate range,
+// not a wider one.
+const MIN_BPM = 80, MAX_BPM = 159;
+
 async function detectBPM(buffer) {
+  // Analyse a window from inside the track: intros are often beatless.
+  const offset = buffer.duration > 90 ? Math.min(30, buffer.duration * 0.25) : 0;
+  const span = Math.min(60, buffer.duration - offset);
+  try {
+    const { guess } = await import('./vendor/web-audio-beat-detector.mjs');
+    const res = await guess(buffer, offset, span, { minTempo: MIN_BPM, maxTempo: MAX_BPM });
+    const bpm = typeof res === 'number' ? res : (res?.bpm ?? res?.tempo);
+    if (bpm && bpm >= MIN_BPM && bpm <= MAX_BPM) return Math.round(bpm * 100) / 100;
+  } catch {
+    // fall through to the homegrown detector
+  }
+  return detectBPMFallback(buffer);
+}
+
+async function detectBPMFallback(buffer) {
   const seconds = Math.min(buffer.duration, 60);
   const offline = new OfflineAudioContext(1, Math.floor(seconds * buffer.sampleRate), buffer.sampleRate);
   const src = offline.createBufferSource();
@@ -72,8 +105,8 @@ async function detectBPM(buffer) {
   const counts = {};
   for (let i = 0; i < peaks.length - 1; i++) {
     let bpm = 60 * rendered.sampleRate / (peaks[i + 1] - peaks[i]);
-    while (bpm < 85) bpm *= 2;
-    while (bpm > 175) bpm /= 2;
+    while (bpm < MIN_BPM) bpm *= 2;
+    while (bpm > MAX_BPM) bpm /= 2;
     const key = Math.round(bpm);
     counts[key] = (counts[key] || 0) + 1;
   }
@@ -181,9 +214,25 @@ async function detectMissingBPMs() {
 }
 
 // ---------- Round logic ----------
+// Deck B is the one that gets pitched, so its base rate r0 = bpmA/bpmB has to
+// land inside the fader's range — otherwise it's a mix you could not perform on
+// the 1210s. Without this a mixed house/hip-hop crate happily deals a 126 vs 90
+// pair and plays deck B 40% sharp. Widening the range with ×2 widens this too.
+function pairablePairs() {
+  const eligible = tracks.filter(t => t.bpm);
+  const pairs = [];
+  for (const a of eligible) {
+    for (const b of eligible) {
+      if (a === b) continue;
+      if (Math.abs(a.bpm / b.bpm - 1) * 100 <= pitchRange) pairs.push([a, b]);
+    }
+  }
+  return pairs;
+}
+
 function canStart() {
   if (mode === 'same') return tracks.length >= 1;
-  return tracks.filter(t => t.bpm).length >= 2;
+  return pairablePairs().length > 0;
 }
 
 function pickHidden() {
@@ -204,9 +253,12 @@ function startRound(keepPair = false) {
       a = tracks[Math.floor(Math.random() * tracks.length)];
       b = a;
     } else {
-      const eligible = tracks.filter(t => t.bpm);
-      a = eligible[Math.floor(Math.random() * eligible.length)];
-      do { b = eligible[Math.floor(Math.random() * eligible.length)]; } while (b === a && eligible.length > 1);
+      const pairs = pairablePairs();
+      if (!pairs.length) {
+        toast(`No two tracks are within ±${pitchRange}% of each other — add closer BPMs, or tap ×2 to widen the range.`);
+        return;
+      }
+      [a, b] = pairs[Math.floor(Math.random() * pairs.length)];
     }
   }
   const r0 = mode === 'same' ? 1 : (a.bpm / b.bpm);
@@ -214,7 +266,7 @@ function startRound(keepPair = false) {
   do {
     hidden = pickHidden();
     needed = (1 / (1 + hidden / 100) - 1) * 100;
-  } while (Math.abs(needed) > 7.5);
+  } while (Math.abs(needed) > pitchRange - 0.5);
   round = { aId: a.id, bId: b.id, hidden, r0 };
   fader = 0; nudge = 0;
   renderFader();
@@ -233,6 +285,32 @@ function currentErrorPct() {
 }
 
 // ---------- Playback ----------
+// Each deck owns a persistent gain → panner → destination chain; only the
+// buffer source is recreated per play. The panner is what the headphone split
+// drives (A hard left, B hard right) to mimic one ear on the monitor.
+function ensureChain(id) {
+  const c = ensureCtx();
+  const d = decks[id];
+  if (!d.gain) {
+    d.gain = c.createGain();
+    if (c.createStereoPanner) {
+      d.panner = c.createStereoPanner();
+      d.gain.connect(d.panner);
+      d.panner.connect(c.destination);
+    } else {
+      d.gain.connect(c.destination);  // pre-14.1 Safari: split silently unavailable
+    }
+    applySplit();
+  }
+  return d;
+}
+function applySplit() {
+  for (const id of ['A', 'B']) {
+    const p = decks[id].panner;
+    if (p) p.pan.value = split ? (id === 'A' ? -1 : 1) : 0;
+  }
+}
+
 async function playDeck(id) {
   if (!round) return;
   const c = ensureCtx();
@@ -240,14 +318,12 @@ async function playDeck(id) {
   let buf;
   try { buf = await getBuffer(trackId); }
   catch { toast('Could not decode this file. Try MP3, WAV, M4A or FLAC.'); return; }
-  const d = decks[id];
+  const d = ensureChain(id);
   if (d.playing) return;
   const src = c.createBufferSource();
   src.buffer = buf;
-  const gain = d.gain || c.createGain();
-  if (!d.gain) { gain.connect(c.destination); d.gain = gain; }
-  gain.gain.value = ($(id === 'A' ? 'volA' : 'volB').value) / 100;
-  src.connect(gain);
+  d.gain.gain.value = ($(id === 'A' ? 'volA' : 'volB').value) / 100;
+  src.connect(d.gain);
   src.playbackRate.value = id === 'A' ? 1 : currentRateB();
   const startAt = buf.duration > 90 ? Math.min(30, buf.duration * 0.25) : 0;
   src.start(0, startAt);
@@ -277,14 +353,19 @@ function applyRateB() {
 }
 
 // ---------- Fader ----------
-const FADER_RANGE = 8;
+// ±8% is the SL-1210 range and stays the default. ×2 opens it to ±16% for the
+// times a pair genuinely needs more room; it does not change the hidden offset,
+// so rounds are no easier — it only buys headroom.
+const BASE_RANGE = 8;
 function buildScale() {
   const scale = $('faderScale');
-  for (let v = -8; v <= 8; v += 2) {
+  scale.innerHTML = '';
+  const step = pitchRange / 4;
+  for (let v = -pitchRange; v <= pitchRange; v += step) {
     const tick = document.createElement('div');
     tick.className = 'fader-tick' + (v === 0 ? ' zero' : '');
-    tick.style.top = `${((FADER_RANGE - v) / (FADER_RANGE * 2)) * 100}%`;
-    if (v % 4 === 0) {
+    tick.style.top = `${((pitchRange - v) / (pitchRange * 2)) * 100}%`;
+    if (v % (step * 2) === 0) {
       const n = document.createElement('span');
       n.className = 'tick-num';
       n.textContent = v > 0 ? `+${v}` : `${v}`;
@@ -293,9 +374,21 @@ function buildScale() {
     scale.appendChild(tick);
   }
 }
+function setPitchRange(range) {
+  pitchRange = range;
+  fader = Math.max(-pitchRange, Math.min(pitchRange, fader));
+  const btn = $('rangeBtn');
+  btn.textContent = `±${pitchRange}%`;
+  btn.classList.toggle('wide', pitchRange > BASE_RANGE);
+  btn.setAttribute('aria-pressed', String(pitchRange > BASE_RANGE));
+  buildScale();
+  renderFader();
+  applyRateB();
+  updateButtons();
+}
 function renderFader() {
   const h = faderTrack.clientHeight - 34;
-  const y = ((FADER_RANGE - fader) / (FADER_RANGE * 2)) * h;
+  const y = ((pitchRange - fader) / (pitchRange * 2)) * h;
   faderKnob.style.top = `${y}px`;
   const shown = fader + nudge;
   pitchReadout.textContent = `${shown >= 0 ? '+' : ''}${shown.toFixed(2)}%`;
@@ -306,7 +399,7 @@ function faderFromPointer(clientY) {
   const usable = rect.height - 34;
   let frac = (clientY - rect.top - 17) / usable;
   frac = Math.max(0, Math.min(1, frac));
-  fader = +(FADER_RANGE - frac * FADER_RANGE * 2).toFixed(2);
+  fader = +(pitchRange - frac * pitchRange * 2).toFixed(2);
   renderFader(); applyRateB();
 }
 faderTrack.addEventListener('pointerdown', e => {
@@ -342,7 +435,7 @@ revealBtn.addEventListener('click', async () => {
   const errBpm = bpmA ? bpmA * err / 100 : null;
   const absBpm = errBpm !== null ? Math.abs(errBpm) : null;
   sessionHistory.push({ err, errBpm });
-  db.saveRound({ err, errBpm, mode, aName: a?.name, bName: b?.name }).catch(() => {});
+  db.saveRound({ err, errBpm, mode, difficulty, pitchRange, aName: a?.name, bName: b?.name }).catch(() => {});
   const sEl = $('revealScore');
   if (absBpm !== null) {
     sEl.textContent = absBpm.toFixed(2);
@@ -418,6 +511,21 @@ $('diffSeg').addEventListener('click', e => {
   difficulty = btn.dataset.diff;
   [...$('diffSeg').children].forEach(b => b.classList.toggle('on', b === btn));
 });
+$('splitSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  setSplit(btn.dataset.split === 'on');
+  db.setSetting('split', split).catch(() => {});
+  if (split && ctx && !ctx.createStereoPanner) toast('This browser has no stereo panner — split unavailable.');
+});
+$('rangeBtn').addEventListener('click', () => {
+  setPitchRange(pitchRange > BASE_RANGE ? BASE_RANGE : BASE_RANGE * 2);
+  db.setSetting('pitchRange', pitchRange).catch(() => {});
+});
+function setSplit(on) {
+  split = on;
+  [...$('splitSeg').children].forEach(b => b.classList.toggle('on', (b.dataset.split === 'on') === on));
+  applySplit();
+}
 
 function updateButtons() {
   newPairBtn.disabled = !canStart();
@@ -426,10 +534,11 @@ function updateButtons() {
 
 // ---------- Init ----------
 async function init() {
-  buildScale();
-  renderFader();
-  window.addEventListener('resize', renderFader);
   db.requestPersistence();
+  try { setSplit(await db.getSetting('split', false)); } catch {}
+  try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
+  catch { setPitchRange(BASE_RANGE); }
+  window.addEventListener('resize', renderFader);
   try {
     tracks = await db.getAllTracks();
   } catch { tracks = []; }

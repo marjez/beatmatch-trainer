@@ -86,6 +86,7 @@ header { display: flex; align-items: baseline; justify-content: space-between; p
   padding: 10px 4px; cursor: pointer;
 }
 .seg button.on { background: var(--panel); color: var(--alloy); box-shadow: 0 0 0 1px var(--edge) inset; }
+.setting-hint { font-size: 10px; color: var(--alloy-dim); line-height: 1.5; margin-top: 8px; letter-spacing: 0.03em; }
 
 .deck { position: relative; }
 .deck-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -140,6 +141,14 @@ header { display: flex; align-items: baseline; justify-content: space-between; p
   background: var(--plinth); border: 1px solid var(--edge); border-radius: 6px;
   padding: 5px 10px; min-width: 84px; text-align: center;
 }
+.range-btn {
+  margin-top: 8px; width: 100%;
+  background: var(--platter); border: 1px solid var(--edge); border-radius: 6px;
+  color: var(--alloy-dim); font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.06em; padding: 5px 4px; cursor: pointer;
+}
+.range-btn.wide { color: var(--amber); border-color: var(--amber); background: #2b2f38; }
+
 .bench-right { flex: 1; display: flex; flex-direction: column; gap: 10px; }
 .nudge-group { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .nudge-btn {

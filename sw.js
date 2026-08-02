@@ -1,12 +1,13 @@
 // sw.js — offline support. App shell is precached; fonts cached on first use.
 // Audio never touches the network: it lives in IndexedDB.
-const CACHE = 'bmt-v1';
+const CACHE = 'bmt-v2';
 const SHELL = [
   './',
   './index.html',
   './css/app.css',
   './js/app.js',
   './js/db.js',
+  './js/vendor/web-audio-beat-detector.mjs',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

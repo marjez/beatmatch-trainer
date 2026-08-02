@@ -9,13 +9,19 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 - DJ setup: 2× Technics SL-1210 MK2, Allen & Heath Xone:PX5, Rekordbox library.
 - The ±8% pitch fader range and pitch-changes-key behaviour are deliberate:
   they mirror the SL-1210. Do NOT add timestretch/key-lock unless asked.
+  The ×2 button opens the fader to ±16% for pairs that need headroom; ±8% is
+  the default and the honest one. ×2 does not touch the hidden offset, so a
+  wide round is no easier — it only adds travel.
 - The app must stay honest ear training: no visual tempo cues during play
   (no waveforms, no BPM readouts of deck B's effective tempo, no drift meters).
   Visual feedback belongs only on the reveal screen.
 
 ## Architecture principles
 - Vanilla JS ES modules, no build step, no framework, no backend. Keep it that way.
-- All persistence is IndexedDB (js/db.js). Audio blobs stored locally; nothing uploads.
+- All persistence is IndexedDB (js/db.js): tracks, rounds, settings. Audio blobs
+  stored locally; nothing uploads. No localStorage.
+- Third-party code is vendored into js/vendor/ as self-contained ESM bundles
+  (no imports, no runtime CDN fetches) and added to the sw SHELL list.
 - Service worker (sw.js) precaches the shell. Bump the CACHE version string on
   every deploy that changes shell files, or users get stale code.
 - Design tokens live in css/app.css :root — palette named after turntable parts
@@ -25,23 +31,36 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 ## Key mechanics (don't break these)
 - Round: deck B rate = r0 × (1 + hidden/100) × (1 + (fader+nudge)/100),
   where r0 = bpmA/bpmB (1 in same-track mode). hidden ∈ ±(2–6)% easy, ±(0.5–2.5)% hard,
-  constrained so the correct fader position is within ±7.5.
+  constrained so the correct fader position is within ±(pitchRange − 0.5).
+- Two-track pairing is restricted to tracks whose r0 sits inside the fader range
+  (|bpmA/bpmB − 1| ≤ pitchRange%), so every pair is one you could actually mix on
+  the 1210s. Without it a mixed house/hip-hop crate deals 126-vs-90 pairs and
+  plays deck B 40% sharp. This is what keeps genres apart — no tagging needed.
 - Result metric: BPM error = deck A's tagged BPM × tempo error %. The reveal
   headline is "N.NN BPM off" (owner's preferred metric — no score out of 100).
   Falls back to percent only if deck A has no BPM. Color bands: good ≤ 0.05 BPM,
   mid ≤ 0.3 BPM, bad above. Rounds store saves {err, errBpm}.
 - Nudge is temporary (±1% while held), snaps back on release — like platter touch.
-- BPM priority: filename "NNNbpm" > manual entry > auto-detection (lowpass peak
-  histogram, clamped 85–175, weakest link — Rekordbox-exported names are preferred).
+- BPM priority: filename "NNNbpm" > manual entry > auto-detection
+  (web-audio-beat-detector, vendored, constrained 80–159; the old lowpass peak
+  histogram survives as detectBPMFallback only). Rekordbox-exported names preferred.
+- The detection range must stay under one octave (80×2 = 160 > 159). A range
+  spanning more than an octave lets a tempo fold two ways and the detector picks
+  half- or double-time — measured: at 85–175 a 174 BPM track came back as 87.
+  80–159 is sized to hold hip-hop (80–100) and house/techno (120–159) at once;
+  160+ material folds to half-time. Don't widen it — that trades a known,
+  bounded limitation for silent half/double errors across the whole crate.
+- BPM values are decimals, never rounded. In two-track mode r0 = bpmA/bpmB, so a
+  whole-number BPM leaves the mix up to ~0.5 BPM out while the reveal reports a
+  perfect match. Both the filename parser and tools/rekordbox_export.py keep the
+  fraction — don't "tidy" either back to integers.
+
+## Built (was roadmap 1–2)
+- Headphone split toggle: StereoPannerNode per deck, A hard left / B hard right,
+  off by default, persisted in the settings store.
+- BPM detection uses vendored web-audio-beat-detector.
 
 ## Roadmap (owner-approved directions, build when asked)
-1. Headphone split toggle: pan deck A hard left, deck B hard right (StereoPannerNode)
-   to mimic one-ear-on-the-monitor mixing. Off by default. (Idea from codebox's
-   MIT beatmatching game.)
-2. Swap homegrown BPM detection for web-audio-beat-detector (npm, works well for
-   electronic music, supports tempo range constraints). Only as fallback — filename
-   BPM from Rekordbox export remains the primary source. Keep the no-build-step
-   rule: vendor the ESM bundle into js/vendor/ rather than adding npm/bundler.
 3. Beat-phase scoring: score not just tempo but beat alignment (onset offset at reveal).
 4. Daily challenge: seeded pair-of-the-day from own crate (date-seeded PRNG), streak counter.
 5. Stats page: all-time chart from the rounds store (score over time, by mode/difficulty).

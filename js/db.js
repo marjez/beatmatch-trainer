@@ -2,7 +2,7 @@
 // Tracks survive app restarts and work fully offline once loaded.
 
 const DB_NAME = 'beatmatch-trainer';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise = null;
 
 function openDB() {
@@ -16,6 +16,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('rounds')) {
         db.createObjectStore('rounds', { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains('settings')) {
+        db.createObjectStore('settings', { keyPath: 'key' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -58,10 +61,10 @@ export async function deleteTrack(id) {
   return tx(db, 'tracks', 'readwrite', s => s.delete(id));
 }
 
-export async function saveRound({ score, err, mode, aName, bName }) {
+export async function saveRound({ err, errBpm, mode, difficulty, pitchRange, aName, bName }) {
   const db = await openDB();
   return tx(db, 'rounds', 'readwrite', s =>
-    s.add({ score, err, mode, aName, bName, at: Date.now() }));
+    s.add({ err, errBpm, mode, difficulty, pitchRange, aName, bName, at: Date.now() }));
 }
 
 export async function getRounds(limit = 500) {
@@ -71,6 +74,20 @@ export async function getRounds(limit = 500) {
     req.onsuccess = () => resolve(req.result.slice(-limit));
     req.onerror = () => reject(req.error);
   });
+}
+
+export async function getSetting(key, fallback = null) {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    const req = db.transaction('settings').objectStore('settings').get(key);
+    req.onsuccess = () => resolve(req.result ? req.result.value : fallback);
+    req.onerror = () => resolve(fallback);
+  });
+}
+
+export async function setSetting(key, value) {
+  const db = await openDB();
+  return tx(db, 'settings', 'readwrite', s => s.put({ key, value }));
 }
 
 // Ask the browser not to evict our storage (iOS can clear unused site data).

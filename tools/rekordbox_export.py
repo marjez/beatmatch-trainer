@@ -102,7 +102,11 @@ def main():
         bpm = ""
         if t["bpm"]:
             try:
-                bpm = f" {round(float(t['bpm']))}bpm"
+                # Keep Rekordbox's decimals. Rounding to a whole number leaves the
+                # crate up to 0.5 BPM out, and in two-track mode that error goes
+                # straight into deck B's base rate — the app would call a mix
+                # perfect while it audibly drifts.
+                bpm = " " + f"{float(t['bpm']):.2f}".rstrip("0").rstrip(".") + "bpm"
             except ValueError:
                 pass
         base = f"{t['artist']} - {t['name']}" if t["artist"] else t["name"]

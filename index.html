@@ -45,6 +45,13 @@
         <button data-diff="hard">Fine offset</button>
       </div>
     </div>
+    <div class="settings-row" style="margin-top:8px;">
+      <div class="seg" id="splitSeg">
+        <button data-split="off" class="on">Both decks centred</button>
+        <button data-split="on">Split L / R</button>
+      </div>
+    </div>
+    <div class="setting-hint">Split pans deck A hard left and deck B hard right — one ear on the monitor, like cueing on the mixer.</div>
   </div>
 
   <div class="panel deck">
@@ -79,6 +86,8 @@
           <div class="fader-knob" id="faderKnob"></div>
         </div>
         <div class="pitch-readout" id="pitchReadout">+0.00%</div>
+        <button class="range-btn" id="rangeBtn" aria-pressed="false"
+                aria-label="Pitch fader range, tap to double">&plusmn;8%</button>
       </div>
       <div class="bench-right">
         <div class="nudge-group">
