@@ -127,7 +127,9 @@
       </div>
       <label class="file-btn">
         &#9835;&nbsp; Add tracks
-        <input type="file" id="fileInput" accept="audio/*,application/json,.json" multiple style="display:none">
+        <!-- No accept attribute on purpose: iOS maps accept to UTIs, and a list
+             mixing audio with JSON greys out the picker. Filtering happens in JS. -->
+        <input type="file" id="fileInput" multiple style="display:none">
       </label>
       <div class="lib-meta" id="libMeta"></div>
       <div class="track-list hidden" id="trackList"></div>

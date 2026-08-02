@@ -159,12 +159,18 @@ function applyGrid(rec, meta) {
   return changed;
 }
 
+const isJson = f => /\.json$/i.test(f.name) || f.type === 'application/json';
+const isAudio = f =>
+  (f.type && f.type.startsWith('audio/')) ||
+  /\.(mp3|m4a|mp4|aac|wav|aif|aiff|flac|ogg|oga|opus|caf|wma)$/i.test(f.name);
+
 fileInput.addEventListener('change', async (e) => {
   const files = [...e.target.files];
   if (!files.length) return;
+  const ignored = files.filter(f => !isJson(f) && !isAudio(f));
 
   let grid = null, gridApplied = 0;
-  for (const f of files.filter(f => /\.json$/i.test(f.name) || f.type === 'application/json')) {
+  for (const f of files.filter(isJson)) {
     const parsed = await readCrateJson(f);
     if (parsed) grid = grid ? new Map([...grid, ...parsed]) : parsed;
   }
@@ -176,7 +182,7 @@ fileInput.addEventListener('change', async (e) => {
 
   let added = 0;
   for (const f of files) {
-    if (/\.json$/i.test(f.name) || f.type === 'application/json') continue;
+    if (!isAudio(f)) continue;
     const name = f.name.replace(/\.[^.]+$/, '');
     if (tracks.some(t => t.name === name && t.blob.size === f.size)) continue;
     const bpm = bpmFromName(f.name);
@@ -187,8 +193,10 @@ fileInput.addEventListener('change', async (e) => {
     added++;
   }
   fileInput.value = '';
-  if (added) toast(`${added} track${added > 1 ? 's' : ''} added to your crate — they'll be here next time too.`);
+  const skipped = ignored.length ? ` (${ignored.length} non-audio file${ignored.length > 1 ? 's' : ''} skipped)` : '';
+  if (added) toast(`${added} track${added > 1 ? 's' : ''} added to your crate — they'll be here next time too.${skipped}`);
   else if (gridApplied) toast(`Beat grid applied to ${gridApplied} track${gridApplied > 1 ? 's' : ''}.`);
+  else if (ignored.length) toast(`Nothing added — those files aren't audio or crate.json.`);
   renderLibrary();
   detectMissingBPMs();
   updateButtons();
