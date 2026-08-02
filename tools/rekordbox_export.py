@@ -34,10 +34,14 @@ def load_collection(xml_path: Path) -> dict:
             continue  # playlist TRACK nodes only carry a Key attribute
         # Location is a file:// URL, percent-encoded
         path = urllib.parse.unquote(location)
-        for prefix in ("file://localhost/", "file://"):
+        for prefix in ("file://localhost", "file://"):
             if path.startswith(prefix):
                 path = path[len(prefix):]
                 break
+        # macOS paths need their leading slash (/Users/...); Windows ones
+        # arrive as /C:/... and need it removed
+        if len(path) > 2 and path[0] == "/" and path[2] == ":":
+            path = path[1:]
         tracks[tid] = {
             "name": t.get("Name", "Unknown"),
             "artist": t.get("Artist", ""),
