@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Beatmatch Trainer</title>
+<meta name="theme-color" content="#14161a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="wordmark">Beatmatch <em>Trainer</em></div>
+    <div class="session-stat" id="sessionStat">Rounds <b>0</b></div>
+  </header>
+
+  <div class="panel" id="libraryPanel">
+    <div class="panel-label">Crate</div>
+    <div id="emptyLib">
+      <p class="drop-hint" style="margin-bottom:12px;">Load your own tracks — they're stored on this device and stay in your crate between sessions. Nothing is uploaded anywhere. BPM is read from the filename (e.g. "Track 128bpm.mp3") or detected automatically; tap a value to correct it.</p>
+    </div>
+    <label class="file-btn">
+      &#9835;&nbsp; Add tracks
+      <input type="file" id="fileInput" accept="audio/*" multiple style="display:none">
+    </label>
+    <div class="lib-meta" id="libMeta"></div>
+    <div class="track-list hidden" id="trackList"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-label">Mode</div>
+    <div class="settings-row">
+      <div class="seg" id="modeSeg">
+        <button data-mode="same" class="on">Same track ×2</button>
+        <button data-mode="pair">Two tracks</button>
+      </div>
+      <div class="seg" id="diffSeg">
+        <button data-diff="easy" class="on">Wide offset</button>
+        <button data-diff="hard">Fine offset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel deck">
+    <div class="deck-head">
+      <div class="deck-id">A</div>
+      <div class="deck-title">
+        <div class="deck-track" id="trackA">No track loaded</div>
+        <div class="deck-sub">Reference · fixed tempo</div>
+      </div>
+      <button class="play-btn" id="playA" aria-label="Play deck A">&#9654;</button>
+    </div>
+    <div class="vol-row">
+      <label>Level</label>
+      <input type="range" class="vol" id="volA" min="0" max="100" value="85">
+    </div>
+  </div>
+
+  <div class="panel deck">
+    <div class="deck-head">
+      <div class="deck-id">B</div>
+      <div class="deck-title">
+        <div class="deck-track" id="trackB">No track loaded</div>
+        <div class="deck-sub">Match this deck to A — by ear</div>
+      </div>
+      <button class="play-btn" id="playB" aria-label="Play deck B">&#9654;</button>
+    </div>
+    <div class="workbench">
+      <div class="fader-col">
+        <div class="fader-label">Pitch</div>
+        <div class="fader-track" id="faderTrack">
+          <div class="fader-scale" id="faderScale"></div>
+          <div class="fader-knob" id="faderKnob"></div>
+        </div>
+        <div class="pitch-readout" id="pitchReadout">+0.00%</div>
+      </div>
+      <div class="bench-right">
+        <div class="nudge-group">
+          <button class="nudge-btn" id="nudgeUp">Nudge&nbsp;+</button>
+          <button class="nudge-btn" id="nudgeDown">Nudge&nbsp;−</button>
+        </div>
+        <div class="nudge-hint">Hold to bend tempo, like touching the platter. Releasing snaps back to the fader.</div>
+        <div class="vol-row">
+          <label>Level</label>
+          <input type="range" class="vol" id="volB" min="0" max="100" value="85">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-secondary" id="newPairBtn" disabled>New pair</button>
+    <button class="btn-primary" id="revealBtn" disabled>Reveal score</button>
+  </div>
+
+  <div class="panel" id="historyPanel" style="margin-top:12px; display:none;">
+    <div class="panel-label">This session</div>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="reveal-card">
+    <div class="reveal-score" id="revealScore">0</div>
+    <div class="reveal-sub" id="revealSub">BPM off</div>
+    <div class="strobe-band">
+      <div class="strobe-row" id="strobeRow"></div>
+    </div>
+    <div class="strobe-caption" id="strobeCaption"></div>
+    <div class="reveal-detail" id="revealDetail"></div>
+    <div class="actions" style="margin-top:22px;">
+      <button class="btn-secondary" id="retryBtn">Same pair again</button>
+      <button class="btn-primary" id="nextBtn">Next pair</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
