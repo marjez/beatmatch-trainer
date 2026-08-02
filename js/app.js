@@ -482,7 +482,9 @@ function buildScale(id) {
   for (let v = -pitchRange; v <= pitchRange; v += step) {
     const tick = document.createElement('div');
     tick.className = 'fader-tick' + (v === 0 ? ' zero' : '');
-    tick.style.top = `${((pitchRange - v) / (pitchRange * 2)) * 100}%`;
+    // Technics orientation: minus at the top, plus at the bottom. Pulling the
+    // fader toward you speeds the deck up — opposite to a CDJ. See PITCH_FLIP.
+    tick.style.top = `${((v + pitchRange) / (pitchRange * 2)) * 100}%`;
     if (v % (step * 2) === 0) {
       const n = document.createElement('span');
       n.className = 'tick-num';
@@ -511,7 +513,7 @@ function renderPitch(id) {
   const d = decks[id];
   const track = $('faderTrack' + id), knob = $('faderKnob' + id);
   const h = track.clientHeight - knob.offsetHeight;
-  knob.style.top = `${((pitchRange - d.fader) / (pitchRange * 2)) * h}px`;
+  knob.style.top = `${((d.fader + pitchRange) / (pitchRange * 2)) * h}px`;
   const shown = d.fader + d.nudge;
   const readout = $('pitchReadout' + id);
   readout.textContent = `${shown >= 0 ? '+' : ''}${shown.toFixed(2)}%`;
@@ -575,9 +577,13 @@ function bindVFader(track, knob, onValue, { fine = false, onFine = null } = {}) 
 
 for (const id of DECKS) {
   bindVFader($('faderTrack' + id), $('faderKnob' + id), frac => {
+    // PITCH_FLIP: frac 0 is the top of the track and maps to MINUS, frac 1 is
+    // the bottom and maps to PLUS — the SL-1210 layout, where pulling the fader
+    // toward you speeds the deck up. Inverting this means inverting the tick
+    // positions and the knob position with it.
     // No snap: a detent you can feel is one you can't be precise inside, and
     // precision is the point. The lamp still reports when you're at zero.
-    decks[id].fader = +(pitchRange - frac * pitchRange * 2).toFixed(3);
+    decks[id].fader = +(frac * pitchRange * 2 - pitchRange).toFixed(3);
     renderPitch(id);
     applyRate(id);
   }, {
@@ -732,7 +738,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v5';
+const APP_BUILD = 'bmt-v6';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
