@@ -16,101 +16,147 @@
 <body>
 <div class="app">
   <header>
+    <button class="menu-btn" id="menuBtn" aria-label="Open crate and settings" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
     <div class="wordmark">Beatmatch <em>Trainer</em></div>
     <div class="session-stat" id="sessionStat">Rounds <b>0</b></div>
   </header>
 
-  <div class="panel" id="libraryPanel">
-    <div class="panel-label">Crate</div>
-    <div id="emptyLib">
-      <p class="drop-hint" style="margin-bottom:12px;">Load your own tracks — they're stored on this device and stay in your crate between sessions. Nothing is uploaded anywhere. BPM is read from the filename (e.g. "Track 128bpm.mp3") or detected automatically; tap a value to correct it.</p>
-    </div>
-    <label class="file-btn">
-      &#9835;&nbsp; Add tracks
-      <input type="file" id="fileInput" accept="audio/*" multiple style="display:none">
-    </label>
-    <div class="lib-meta" id="libMeta"></div>
-    <div class="track-list hidden" id="trackList"></div>
-  </div>
+  <div class="decks">
 
-  <div class="panel">
-    <div class="panel-label">Mode</div>
-    <div class="settings-row">
-      <div class="seg" id="modeSeg">
-        <button data-mode="same" class="on">Same track ×2</button>
-        <button data-mode="pair">Two tracks</button>
-      </div>
-      <div class="seg" id="diffSeg">
-        <button data-diff="easy" class="on">Wide offset</button>
-        <button data-diff="hard">Fine offset</button>
-      </div>
-    </div>
-    <div class="settings-row" style="margin-top:8px;">
-      <div class="seg" id="splitSeg">
-        <button data-split="off" class="on">Both decks centred</button>
-        <button data-split="on">Split L / R</button>
-      </div>
-    </div>
-    <div class="setting-hint">Split pans deck A hard left and deck B hard right — one ear on the monitor, like cueing on the mixer.</div>
-  </div>
-
-  <div class="panel deck">
-    <div class="deck-head">
-      <div class="deck-id">A</div>
-      <div class="deck-title">
-        <div class="deck-track" id="trackA">No track loaded</div>
-        <div class="deck-sub">Reference · fixed tempo</div>
-      </div>
-      <button class="play-btn" id="playA" aria-label="Play deck A">&#9654;</button>
-    </div>
-    <div class="vol-row">
-      <label>Level</label>
-      <input type="range" class="vol" id="volA" min="0" max="100" value="85">
-    </div>
-  </div>
-
-  <div class="panel deck">
-    <div class="deck-head">
-      <div class="deck-id">B</div>
-      <div class="deck-title">
-        <div class="deck-track" id="trackB">No track loaded</div>
-        <div class="deck-sub">Match this deck to A — by ear</div>
-      </div>
-      <button class="play-btn" id="playB" aria-label="Play deck B">&#9654;</button>
-    </div>
-    <div class="workbench">
-      <div class="fader-col">
-        <div class="fader-label">Pitch</div>
-        <div class="fader-track" id="faderTrack">
-          <div class="fader-scale" id="faderScale"></div>
-          <div class="fader-knob" id="faderKnob"></div>
-        </div>
-        <div class="pitch-readout" id="pitchReadout">+0.00%</div>
-        <button class="range-btn" id="rangeBtn" aria-pressed="false"
-                aria-label="Pitch fader range, tap to double">&plusmn;8%</button>
-      </div>
-      <div class="bench-right">
-        <div class="nudge-group">
-          <button class="nudge-btn" id="nudgeUp">Nudge&nbsp;+</button>
-          <button class="nudge-btn" id="nudgeDown">Nudge&nbsp;−</button>
-        </div>
-        <div class="nudge-hint">Hold to bend tempo, like touching the platter. Releasing snaps back to the fader.</div>
-        <div class="vol-row">
-          <label>Level</label>
-          <input type="range" class="vol" id="volB" min="0" max="100" value="85">
+    <section class="channel" data-deck="A">
+      <div class="ch-head">
+        <div class="ch-num">1</div>
+        <div class="ch-title">
+          <div class="ch-track" id="trackA">No track loaded</div>
+          <div class="ch-sub" id="subA">Anchor</div>
         </div>
       </div>
-    </div>
+
+      <div class="ch-faders">
+        <div class="fader-unit">
+          <div class="fader-cap">Pitch</div>
+          <div class="fader-track pitch-track" id="faderTrackA">
+            <div class="fader-scale" id="faderScaleA"></div>
+            <div class="zero-led" id="zeroLedA"></div>
+            <div class="fader-knob pitch-knob" id="faderKnobA"></div>
+          </div>
+          <div class="pitch-readout" id="pitchReadoutA">+0.00%</div>
+        </div>
+        <div class="fader-unit">
+          <div class="fader-cap">Level</div>
+          <div class="fader-track vol-track" id="volTrackA">
+            <div class="fader-knob vol-knob" id="volKnobA"></div>
+          </div>
+          <div class="vol-readout" id="volReadoutA">85</div>
+        </div>
+      </div>
+
+      <div class="ch-nudge">
+        <button class="nudge-btn" id="nudgeUpA">Nudge&nbsp;+</button>
+        <button class="nudge-btn" id="nudgeDownA">Nudge&nbsp;&minus;</button>
+      </div>
+
+      <div class="ch-transport">
+        <button class="cue-btn" id="cueA" aria-label="Cue deck 1">Cue</button>
+        <button class="play-btn" id="playA" aria-label="Play deck 1">&#9654;</button>
+      </div>
+    </section>
+
+    <section class="channel" data-deck="B">
+      <div class="ch-head">
+        <div class="ch-num">2</div>
+        <div class="ch-title">
+          <div class="ch-track" id="trackB">No track loaded</div>
+          <div class="ch-sub" id="subB">Match by ear</div>
+        </div>
+      </div>
+
+      <div class="ch-faders">
+        <div class="fader-unit">
+          <div class="fader-cap">Pitch</div>
+          <div class="fader-track pitch-track" id="faderTrackB">
+            <div class="fader-scale" id="faderScaleB"></div>
+            <div class="zero-led" id="zeroLedB"></div>
+            <div class="fader-knob pitch-knob" id="faderKnobB"></div>
+          </div>
+          <div class="pitch-readout" id="pitchReadoutB">+0.00%</div>
+        </div>
+        <div class="fader-unit">
+          <div class="fader-cap">Level</div>
+          <div class="fader-track vol-track" id="volTrackB">
+            <div class="fader-knob vol-knob" id="volKnobB"></div>
+          </div>
+          <div class="vol-readout" id="volReadoutB">85</div>
+        </div>
+      </div>
+
+      <div class="ch-nudge">
+        <button class="nudge-btn" id="nudgeUpB">Nudge&nbsp;+</button>
+        <button class="nudge-btn" id="nudgeDownB">Nudge&nbsp;&minus;</button>
+      </div>
+
+      <div class="ch-transport">
+        <button class="cue-btn" id="cueB" aria-label="Cue deck 2">Cue</button>
+        <button class="play-btn" id="playB" aria-label="Play deck 2">&#9654;</button>
+      </div>
+    </section>
+
   </div>
 
   <div class="actions">
     <button class="btn-secondary" id="newPairBtn" disabled>New pair</button>
     <button class="btn-primary" id="revealBtn" disabled>Reveal score</button>
   </div>
+</div>
 
-  <div class="panel" id="historyPanel" style="margin-top:12px; display:none;">
-    <div class="panel-label">This session</div>
-    <div id="historyList"></div>
+<!-- Crate and settings live off-screen so the mixer owns the whole viewport and
+     nothing scrolls under your finger while you're on the pitch fader. -->
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Crate and settings">
+  <div class="sheet-head">
+    <div class="sheet-title">Crate &amp; settings</div>
+    <button class="sheet-close" id="sheetClose" aria-label="Close">&times;</button>
+  </div>
+  <div class="sheet-body">
+
+    <div class="panel" id="libraryPanel">
+      <div class="panel-label">Crate</div>
+      <div id="emptyLib">
+        <p class="drop-hint" style="margin-bottom:12px;">Load your own tracks — they're stored on this device and stay in your crate between sessions. Nothing is uploaded anywhere. BPM is read from the filename (e.g. "Track 128bpm.mp3") or detected automatically; tap a value to correct it. Select <b>crate.json</b> along with the audio and playback starts on a real downbeat instead of in the intro.</p>
+      </div>
+      <label class="file-btn">
+        &#9835;&nbsp; Add tracks
+        <input type="file" id="fileInput" accept="audio/*,application/json,.json" multiple style="display:none">
+      </label>
+      <div class="lib-meta" id="libMeta"></div>
+      <div class="track-list hidden" id="trackList"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">Mode</div>
+      <div class="settings-row">
+        <div class="seg" id="diffSeg">
+          <button data-diff="easy" class="on">Wide offset</button>
+          <button data-diff="hard">Fine offset</button>
+        </div>
+      </div>
+      <div class="settings-row" style="margin-top:8px;">
+        <div class="seg" id="splitSeg">
+          <button data-split="off" class="on">Both centred</button>
+          <button data-split="on">Split L / R</button>
+        </div>
+        <button class="range-btn" id="rangeBtn" aria-pressed="false"
+                aria-label="Pitch fader range, tap to double">&plusmn;8%</button>
+      </div>
+      <div class="setting-hint">Split pans deck 1 hard left and deck 2 hard right — one ear on the monitor, like cueing on the mixer. &times;2 opens both pitch faders to &plusmn;16% when a pair needs the room. Hold nudge to bend tempo like touching the platter; cue returns a deck to its start point.</div>
+    </div>
+
+    <div class="panel" id="historyPanel" style="display:none;">
+      <div class="panel-label">This session</div>
+      <div id="historyList"></div>
+    </div>
+
   </div>
 </div>
 

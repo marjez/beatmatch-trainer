@@ -14,7 +14,27 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   wide round is no easier — it only adds travel.
 - The app must stay honest ear training: no visual tempo cues during play
   (no waveforms, no BPM readouts of deck B's effective tempo, no drift meters).
-  Visual feedback belongs only on the reveal screen.
+  Visual feedback belongs only on the reveal screen. This is why the mixer has
+  NO level meters even though Beatmatch PRO does — two bouncing meters let you
+  watch the kicks line up and match by eye. Don't add them.
+
+## Layout rules
+- The mixer is a fixed, non-scrolling surface (body is position:fixed, the .app
+  is a flex column at 100% height). On a touchscreen any page scroll steals the
+  drag meant for the pitch fader. Faders flex to fill leftover height, so their
+  pixel height is only known after layout — a ResizeObserver re-renders the knobs.
+- Crate, mode, settings and session history live in the slide-up sheet (#sheet),
+  which is the only thing allowed to scroll. Don't move controls back onto the
+  main screen; the vertical room belongs to the faders.
+- There is NO zero snap. A detent you can feel is one you can't be precise
+  inside, and 0.1 BPM is ~2px of raw fader travel. The green lamp reports being
+  within DETENT_BPM of zero instead of snapping there. Don't reintroduce a snap.
+- Pitch faders have fine-drag: horizontal distance from the fader scales vertical
+  sensitivity (1/(1+dx/30)). Movement is integrated incrementally, never
+  recomputed from the press point, or changing scale mid-drag makes the knob jump.
+- Playback starts at phraseStart(): a whole number of 4-bar phrases from the
+  Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
+  which the file picker accepts alongside audio. No grid → old 25%-in fallback.
 
 ## Architecture principles
 - Vanilla JS ES modules, no build step, no framework, no backend. Keep it that way.
@@ -29,9 +49,18 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 - Fonts: Chakra Petch (display), IBM Plex Mono (data), IBM Plex Sans (body).
 
 ## Key mechanics (don't break these)
-- Round: deck B rate = r0 × (1 + hidden/100) × (1 + (fader+nudge)/100),
-  where r0 = bpmA/bpmB (1 in same-track mode). hidden ∈ ±(2–6)% easy, ±(0.5–2.5)% hard,
-  constrained so the correct fader position is within ±(pitchRange − 0.5).
+- Both decks are live. Deck 1 rate = 1 + (fader+nudge)/100. Deck 2 rate =
+  r0 × (1 + hidden/100) × (1 + (fader+nudge)/100), r0 = bpmA/bpmB. hidden ∈
+  ±(2–6)% easy, ±(0.5–2.5)% hard, constrained so the correct position is within
+  ±(pitchRange − 0.5). Rounds are always two different tracks — the owner
+  removed same-track mode, so every round needs a BPM on both decks.
+- Score is the RELATIVE tempo error: ((1+hidden/100)(1+faderB/100) / (1+faderA/100) − 1)×100.
+  Nudge is excluded — it's a momentary bend, not part of the answer. So there is
+  no single "correct fader position" any more; deck 2 has to sit wherever cancels
+  the hidden offset relative to wherever deck 1 is.
+- Cue returns a deck to its cuePoint (the round's start offset, ~25% in). Play
+  resumes from where it stopped, so playhead position is tracked in decks[id].offset
+  via markPosition() — always mark BEFORE changing rate or the position drifts.
 - Two-track pairing is restricted to tracks whose r0 sits inside the fader range
   (|bpmA/bpmB − 1| ≤ pitchRange%), so every pair is one you could actually mix on
   the 1210s. Without it a mixed house/hip-hop crate deals 126-vs-90 pairs and

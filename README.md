@@ -10,10 +10,14 @@ Beatmatch PRO built around your own crate.
 - Match B to A by ear using the ±8% pitch fader (SL-1210 range) and hold-to-nudge buttons.
 - **Reveal score** shows how many BPM you were out, plus a strobe-dot row that drifts
   at your error rate — frozen dots means you locked it.
-- **Same track ×2** mode is pure ear training (no BPM needed).
-  **Two tracks** mode mixes different tunes using their BPMs, and only ever pairs
-  tracks close enough in tempo to be mixable within the fader's range — so a
-  mixed house/hip-hop crate never deals you a pair you couldn't play on the decks.
+- Every round pairs two different tracks, and only ever pairs tracks close enough
+  in tempo to be mixable within the fader's range — so a mixed house/hip-hop
+  crate never deals you a pair you couldn't play on the decks.
+- Playback starts on **beat 1 of a bar**, a whole number of 4-bar phrases into the
+  track, using Rekordbox's own beat grid from `crate.json` — no waiting through
+  beatless intros. Cue returns the deck to that point.
+- **Fine-drag**: slide sideways while dragging a pitch fader and it gets
+  progressively finer (5× at ~120px out), enough to place it inside 0.01 BPM.
 - **±8%** under the fader is the SL-1210 range. Tap it for **±16%** when a pair
   needs more room; the hidden offset is unchanged, so it adds travel, not slack.
 - **Split L / R** pans deck A hard left and deck B hard right, so you can practise
