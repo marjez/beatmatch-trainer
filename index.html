@@ -20,23 +20,13 @@
       <span></span><span></span><span></span>
     </button>
     <div class="wordmark">Beatmatch <em>Trainer</em></div>
-    <div class="session-stat" id="sessionStat">Rounds <b>0</b></div>
   </header>
 
   <div class="decks">
 
     <section class="channel" data-deck="A">
-      <div class="ch-head">
-        <div class="ch-num">1</div>
-        <div class="ch-title">
-          <div class="ch-track" id="trackA">No track loaded</div>
-          <div class="ch-sub" id="subA">Anchor</div>
-        </div>
-      </div>
-
       <div class="ch-faders">
         <div class="fader-unit">
-          <div class="fader-cap">Pitch</div>
           <div class="fader-track pitch-track" id="faderTrackA">
             <div class="fader-scale" id="faderScaleA"></div>
             <div class="zero-led" id="zeroLedA"></div>
@@ -45,7 +35,6 @@
           <div class="pitch-readout" id="pitchReadoutA">+0.00%</div>
         </div>
         <div class="fader-unit">
-          <div class="fader-cap">Level</div>
           <div class="fader-track vol-track" id="volTrackA">
             <div class="fader-knob vol-knob" id="volKnobA"></div>
           </div>
@@ -54,28 +43,20 @@
       </div>
 
       <div class="ch-nudge">
-        <button class="nudge-btn" id="nudgeUpA">Nudge&nbsp;+</button>
-        <button class="nudge-btn" id="nudgeDownA">Nudge&nbsp;&minus;</button>
+        <button class="nudge-btn" id="nudgeUpA" aria-label="Nudge deck 1 faster">+2%</button>
+        <button class="nudge-btn" id="nudgeDownA" aria-label="Nudge deck 1 slower">&minus;2%</button>
       </div>
 
       <div class="ch-transport">
+        <div class="ch-num">1</div>
         <button class="cue-btn" id="cueA" aria-label="Cue deck 1">Cue</button>
         <button class="play-btn" id="playA" aria-label="Play deck 1">&#9654;</button>
       </div>
     </section>
 
     <section class="channel" data-deck="B">
-      <div class="ch-head">
-        <div class="ch-num">2</div>
-        <div class="ch-title">
-          <div class="ch-track" id="trackB">No track loaded</div>
-          <div class="ch-sub" id="subB">Match by ear</div>
-        </div>
-      </div>
-
       <div class="ch-faders">
         <div class="fader-unit">
-          <div class="fader-cap">Pitch</div>
           <div class="fader-track pitch-track" id="faderTrackB">
             <div class="fader-scale" id="faderScaleB"></div>
             <div class="zero-led" id="zeroLedB"></div>
@@ -84,7 +65,6 @@
           <div class="pitch-readout" id="pitchReadoutB">+0.00%</div>
         </div>
         <div class="fader-unit">
-          <div class="fader-cap">Level</div>
           <div class="fader-track vol-track" id="volTrackB">
             <div class="fader-knob vol-knob" id="volKnobB"></div>
           </div>
@@ -93,11 +73,12 @@
       </div>
 
       <div class="ch-nudge">
-        <button class="nudge-btn" id="nudgeUpB">Nudge&nbsp;+</button>
-        <button class="nudge-btn" id="nudgeDownB">Nudge&nbsp;&minus;</button>
+        <button class="nudge-btn" id="nudgeUpB" aria-label="Nudge deck 2 faster">+2%</button>
+        <button class="nudge-btn" id="nudgeDownB" aria-label="Nudge deck 2 slower">&minus;2%</button>
       </div>
 
       <div class="ch-transport">
+        <div class="ch-num">2</div>
         <button class="cue-btn" id="cueB" aria-label="Cue deck 2">Cue</button>
         <button class="play-btn" id="playB" aria-label="Play deck 2">&#9654;</button>
       </div>
@@ -156,6 +137,7 @@
 
     <div class="panel" id="historyPanel" style="display:none;">
       <div class="panel-label">This session</div>
+      <div class="session-stat" id="sessionStat">Rounds <b>0</b></div>
       <div id="historyList"></div>
     </div>
 

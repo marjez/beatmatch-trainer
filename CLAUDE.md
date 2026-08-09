@@ -36,6 +36,20 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
   which the file picker accepts alongside audio. No grid → old 25%-in fallback.
 
+## Audio architecture (do not "optimise" back)
+- Decks STREAM through an <audio> element into a MediaElementAudioSourceNode.
+  Never go back to decodeAudioData + AudioBufferSourceNode for playback:
+  decoding expands compressed audio to float32 PCM, so a 22 MB / 9 min MP3
+  becomes 216 MB in RAM and two decks 425 MB. iOS Safari kills the page well
+  before that — it presented as "can't decode this file" plus silence on the
+  phone while working fine on a desktop. Streaming holds a few MB per deck.
+- Media elements time-stretch by default. preservesPitch = false (plus the
+  webkit/moz prefixes) is REQUIRED on every element and must be re-applied when
+  the rate changes, or pitch stops following tempo and the app stops being a
+  1210 simulator.
+- decodeAudioData survives only in decodeForAnalysis(), for BPM detection of
+  untagged tracks. Nothing caches the result — one held buffer can kill the tab.
+
 ## Architecture principles
 - Vanilla JS ES modules, no build step, no framework, no backend. Keep it that way.
 - All persistence is IndexedDB (js/db.js): tracks, rounds, settings. Audio blobs

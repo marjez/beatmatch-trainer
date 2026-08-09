@@ -8,8 +8,6 @@ import * as db from './db.js';
 
 // ---------- State ----------
 let tracks = [];            // {id, name, bpm, bpmSource, blob}
-const bufferCache = new Map();
-const MAX_CACHED = 6;
 let ctx = null;
 const mode = 'pair';        // always two different tracks; recorded on saved rounds
 let difficulty = 'easy';
@@ -20,10 +18,10 @@ let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
 // the score is the tempo difference BETWEEN them. offset/mark track the playhead
 // so Cue can return to the start point and Play can resume where it stopped.
 const decks = {
-  A: { source: null, gain: null, panner: null, playing: false,
-       fader: 0, nudge: 0, vol: 85, rate: 1, offset: 0, mark: 0, cuePoint: 0 },
-  B: { source: null, gain: null, panner: null, playing: false,
-       fader: 0, nudge: 0, vol: 85, rate: 1, offset: 0, mark: 0, cuePoint: 0 },
+  A: { el: null, node: null, gain: null, panner: null, url: null, playing: false,
+       fader: 0, nudge: 0, vol: 85, rate: 1, cuePoint: 0 },
+  B: { el: null, node: null, gain: null, panner: null, url: null, playing: false,
+       fader: 0, nudge: 0, vol: 85, rate: 1, cuePoint: 0 },
 };
 const DECKS = ['A', 'B'];
 let sessionHistory = [];
@@ -121,18 +119,14 @@ async function detectBPMFallback(buffer) {
 }
 
 // ---------- Buffers ----------
-async function getBuffer(trackId) {
-  if (bufferCache.has(trackId)) return bufferCache.get(trackId);
+// Only BPM detection needs a decoded buffer, and only for tracks that arrived
+// without a BPM. Nothing is cached: a decoded track is ~200 MB, so holding
+// even one is enough to get the page killed on iOS. Caller must let it go.
+async function decodeForAnalysis(trackId) {
   ensureCtx();
   const t = tracks.find(x => x.id === trackId);
   const arr = await t.blob.arrayBuffer();
-  const buf = await ctx.decodeAudioData(arr);
-  bufferCache.set(trackId, buf);
-  if (bufferCache.size > MAX_CACHED) {
-    const oldest = bufferCache.keys().next().value;
-    if (oldest !== trackId) bufferCache.delete(oldest);
-  }
-  return buf;
+  return ctx.decodeAudioData(arr);
 }
 
 // ---------- Library ----------
@@ -235,7 +229,6 @@ function renderLibrary() {
     del.addEventListener('click', async () => {
       await db.deleteTrack(t.id);
       tracks = tracks.filter(x => x.id !== t.id);
-      bufferCache.delete(t.id);
       if (round && (round.aId === t.id || round.bId === t.id)) { round = null; stopDeck('A'); stopDeck('B'); }
       renderLibrary(); updateButtons();
     });
@@ -249,9 +242,9 @@ async function detectMissingBPMs() {
     if (t.bpm || t.bpmSource === 'pending') continue;
     t.bpmSource = 'pending';
     try {
-      const buf = await getBuffer(t.id);
-      if (t.bpmSource !== 'pending') continue;
-      const bpm = await detectBPM(buf);
+      let buf = await decodeForAnalysis(t.id);
+      const bpm = t.bpmSource === 'pending' ? await detectBPM(buf) : null;
+      buf = null;                       // drop the ~200 MB buffer immediately
       if (t.bpmSource !== 'pending') continue;
       if (bpm) { t.bpm = bpm; t.bpmSource = 'auto'; await db.updateTrack(t); }
       else { t.bpmSource = null; }
@@ -327,19 +320,12 @@ function startRound(keepPair = false) {
   round = { aId: a.id, bId: b.id, hidden, r0 };
   for (const id of DECKS) {
     const d = decks[id];
-    d.fader = 0; d.nudge = 0; d.rate = 1; d.offset = 0; d.cuePoint = 0;
+    d.fader = 0; d.nudge = 0; d.rate = 1; d.cuePoint = 0;
   }
   renderAllFaders();
-  $('trackA').textContent = a.name;
-  $('trackB').textContent = b.name;
   updateButtons();
-  const setCue = (id, track) => getBuffer(track.id).then(buf => {
-    const at = phraseStart(track, buf.duration);
-    decks[id].cuePoint = at;
-    if (!decks[id].playing) decks[id].offset = at;
-  });
-  setCue('A', a).catch(() => toast('Could not decode deck 1 track'));
-  setCue('B', b).catch(() => toast('Could not decode deck 2 track'));
+  loadDeck('A', a);
+  loadDeck('B', b);
 }
 
 // Deck A is the tempo anchor at rate 1 when its fader sits at 0; r0 pre-matches
@@ -364,14 +350,47 @@ function effectiveBpmA(track) {
 }
 
 // ---------- Playback ----------
-// Each deck owns a persistent gain → panner → destination chain; only the
-// buffer source is recreated per play. The panner is what the headphone split
-// drives (A hard left, B hard right) to mimic one ear on the monitor.
+// Decks STREAM through an <audio> element rather than decoding to an
+// AudioBuffer. decodeAudioData expands compressed audio to float32 PCM: a
+// 22 MB / 9 min MP3 becomes 216 MB in RAM, two decks 425 MB, and iOS Safari
+// kills the page well before that — which showed up as "can't decode" and
+// silence on the phone while working fine on a desktop. Streaming holds a few
+// MB per deck instead.
+//
+// The catch: media elements time-stretch by default, preserving pitch when you
+// change playbackRate. That's exactly what this app must NOT do — on a 1210,
+// pitch and tempo move together. preservesPitch = false restores that.
+function makeElement(id) {
+  const el = new Audio();
+  el.preload = 'auto';
+  el.crossOrigin = 'anonymous';
+  killPitchPreservation(el);
+  el.addEventListener('ended', () => updateTransport());
+  el.addEventListener('pause', () => updateTransport());
+  el.addEventListener('play', () => updateTransport());
+  el.addEventListener('error', () => {
+    const err = el.error;
+    toast(`Deck ${id === 'A' ? 1 : 2}: ${err && err.code === 4
+      ? "this format won't play on this device."
+      : 'could not load this track.'}`);
+  });
+  return el;
+}
+function killPitchPreservation(el) {
+  el.preservesPitch = false;
+  el.webkitPreservesPitch = false;   // older Safari
+  el.mozPreservesPitch = false;
+}
+
 function ensureChain(id) {
   const c = ensureCtx();
   const d = decks[id];
   if (!d.gain) {
     d.gain = c.createGain();
+    // A media element can only ever be given one source node, so this is built
+    // once per deck and the element's src is swapped per round.
+    d.node = c.createMediaElementSource(d.el);
+    d.node.connect(d.gain);
     if (c.createStereoPanner) {
       d.panner = c.createStereoPanner();
       d.gain.connect(d.panner);
@@ -381,77 +400,70 @@ function ensureChain(id) {
     }
     applySplit();
   }
+  d.gain.gain.value = d.vol / 100;
   return d;
 }
 function applySplit() {
-  for (const id of ['A', 'B']) {
+  for (const id of DECKS) {
     const p = decks[id].panner;
     if (p) p.pan.value = split ? (id === 'A' ? -1 : 1) : 0;
   }
 }
 
-// Advance the stored playhead to now, at whatever rate has been in force since
-// the last mark. Must be called BEFORE changing rate, or the elapsed audio gets
-// accounted at the wrong speed and Cue drifts away from the real start point.
-function markPosition(id) {
+// Point a deck at a track. Duration comes from the element's metadata, so the
+// phrase start can be worked out without decoding anything.
+function loadDeck(id, track) {
   const d = decks[id];
-  if (!d.playing || !ctx) return;
-  const now = ctx.currentTime;
-  d.offset += (now - d.mark) * d.rate;
-  d.mark = now;
-}
-function applyRate(id) {
-  if (!round) return;
-  markPosition(id);
-  const d = decks[id];
-  d.rate = rateFor(id);
-  if (d.source) d.source.playbackRate.value = d.rate;
+  d.el.pause();
+  if (d.url) URL.revokeObjectURL(d.url);
+  d.url = URL.createObjectURL(track.blob);
+  d.cuePoint = 0;
+  d.el.src = d.url;
+  d.el.load();
+  d.el.addEventListener('loadedmetadata', () => {
+    d.cuePoint = phraseStart(track, d.el.duration || 0);
+    try { d.el.currentTime = d.cuePoint; } catch {}
+    applyRate(id);
+  }, { once: true });
 }
 
-async function playDeck(id) {
+function applyRate(id) {
+  const d = decks[id];
   if (!round) return;
-  const c = ensureCtx();
-  const trackId = id === 'A' ? round.aId : round.bId;
-  let buf;
-  try { buf = await getBuffer(trackId); }
-  catch { toast('Could not decode this file. Try MP3, WAV, M4A or FLAC.'); return; }
-  const d = ensureChain(id);
-  if (d.playing) return;
-  const src = c.createBufferSource();
-  src.buffer = buf;
-  d.gain.gain.value = d.vol / 100;
-  src.connect(d.gain);
   d.rate = rateFor(id);
-  src.playbackRate.value = d.rate;
-  if (d.offset >= buf.duration) d.offset = d.cuePoint;
-  src.start(0, d.offset);
-  d.source = src; d.playing = true;
-  d.mark = c.currentTime;
-  src.onended = () => {
-    if (d.source === src) { markPosition(id); d.playing = false; d.source = null; updateTransport(); }
-  };
+  killPitchPreservation(d.el);
+  try { d.el.playbackRate = d.rate; } catch {}
+}
+
+// Called straight from the click handler with nothing awaited before play(),
+// so iOS still sees it as a user gesture.
+function playDeck(id) {
+  if (!round) return;
+  const d = ensureChain(id);
+  applyRate(id);
+  const p = d.el.play();
+  if (p && p.catch) p.catch(() => toast('Tap play again — iOS blocked audio until you interact.'));
   updateTransport();
 }
 function stopDeck(id) {
-  const d = decks[id];
-  markPosition(id);
-  if (d.source) { d.source.onended = null; try { d.source.stop(); } catch {} d.source = null; }
-  d.playing = false;
+  decks[id].el.pause();
   updateTransport();
 }
-// Cue: stop and return the playhead to this round's start point, so you can drop
-// the track again from a known spot.
+// Cue: stop and return to this round's start point, so you can drop the track
+// again from a known spot. Play resumes wherever you stopped.
 function cueDeck(id) {
-  const wasPlaying = decks[id].playing;
-  stopDeck(id);
-  decks[id].offset = decks[id].cuePoint;
-  if (wasPlaying) updateTransport();
+  const d = decks[id];
+  d.el.pause();
+  try { d.el.currentTime = d.cuePoint; } catch {}
+  updateTransport();
 }
 function updateTransport() {
   for (const id of DECKS) {
+    const playing = !decks[id].el.paused && !decks[id].el.ended;
+    decks[id].playing = playing;
     const btn = $('play' + id);
-    btn.classList.toggle('playing', decks[id].playing);
-    btn.innerHTML = decks[id].playing ? '&#9632;' : '&#9654;';
+    btn.classList.toggle('playing', playing);
+    btn.innerHTML = playing ? '&#9632;' : '&#9654;';
   }
 }
 for (const id of DECKS) {
@@ -598,6 +610,9 @@ for (const id of DECKS) {
 }
 
 // ---------- Nudge ----------
+// Momentary tempo bend, like a thumb on the platter. 1% was too weak to pull a
+// drifting deck back; the buttons are labelled with the value so it's explicit.
+const NUDGE_PCT = 2.0;
 function bindNudge(btn, id, amount) {
   const start = e => {
     e.preventDefault();
@@ -616,8 +631,8 @@ function bindNudge(btn, id, amount) {
   btn.addEventListener('pointerleave', end);
 }
 for (const id of DECKS) {
-  bindNudge($('nudgeUp' + id), id, 1.0);
-  bindNudge($('nudgeDown' + id), id, -1.0);
+  bindNudge($('nudgeUp' + id), id, NUDGE_PCT);
+  bindNudge($('nudgeDown' + id), id, -NUDGE_PCT);
 }
 
 // ---------- Reveal ----------
@@ -738,7 +753,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v6';
+const APP_BUILD = 'bmt-v7';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -774,6 +789,7 @@ async function init() {
   try { setSplit(await db.getSetting('split', false)); } catch {}
   try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
   catch { setPitchRange(BASE_RANGE); }
+  for (const id of DECKS) decks[id].el = makeElement(id);
   renderAllFaders();
   window.addEventListener('resize', renderAllFaders);
   // The faders now flex to fill the viewport, so their pixel height isn't known

@@ -36,9 +36,9 @@ body {
   display: flex; flex-direction: column; gap: 8px;
 }
 
-header { display: flex; align-items: center; gap: 10px; padding: 2px 2px 4px; flex-shrink: 0; }
+header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex-shrink: 0; }
 .menu-btn {
-  width: 34px; height: 30px; flex-shrink: 0; cursor: pointer;
+  width: 32px; height: 26px; flex-shrink: 0; cursor: pointer;
   background: var(--platter); border: 1px solid var(--edge); border-radius: 7px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
 }
@@ -128,23 +128,15 @@ header { display: flex; align-items: center; gap: 10px; padding: 2px 2px 4px; fl
   box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 6px 18px rgba(0,0,0,0.35);
   display: flex; flex-direction: column; gap: 8px;
 }
-.ch-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ch-num {
-  font-family: var(--font-display); font-weight: 700; font-size: 12px;
-  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--platter); border: 1px solid var(--edge);
+  background: var(--platter); border: 1px solid var(--edge); color: var(--alloy-dim);
 }
-.ch-title { flex: 1; min-width: 0; }
-.ch-track { font-size: 11.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ch-sub { font-family: var(--font-mono); font-size: 9.5px; color: var(--alloy-dim); margin-top: 1px; }
 
-.ch-faders { flex: 1; min-height: 0; display: flex; gap: 8px; justify-content: center; }
+.ch-faders { flex: 1; min-height: 0; display: flex; gap: 6px; justify-content: center; }
 .fader-unit { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; min-height: 0; }
-.fader-cap {
-  font-family: var(--font-display); font-size: 8.5px; letter-spacing: 0.14em;
-  color: var(--alloy-dim); text-transform: uppercase;
-}
 /* Faders take whatever vertical room the viewport leaves, so the mixer fits on
    any phone without scrolling. renderPitch/renderLevel read clientHeight at
    paint time and a ResizeObserver re-renders when it changes. */
@@ -154,14 +146,16 @@ header { display: flex; align-items: center; gap: 10px; padding: 2px 2px 4px; fl
   border: 1px solid var(--edge); border-radius: 8px;
   touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
 }
-.pitch-track { width: 56px; }
-.vol-track { width: 34px; }
+/* The pitch fader is the instrument here — give it the width and let level be
+   the thin one. Wider track means a wider knob and steadier thumb control. */
+.pitch-track { width: 78px; }
+.vol-track { width: 26px; }
 .fader-scale { position: absolute; inset: 0; }
 .fader-tick { position: absolute; left: 5px; right: 5px; height: 1px; background: #3a3f4a; }
 .fader-tick.zero { background: var(--alloy-dim); height: 2px; }
 .fader-tick .tick-num {
-  position: absolute; right: 2px; top: -6px;
-  font-family: var(--font-mono); font-size: 7.5px; color: #565c68;
+  position: absolute; right: 3px; top: -7px;
+  font-family: var(--font-mono); font-size: 9.5px; color: #6d7480;
 }
 .fader-knob {
   position: absolute; left: 3px; right: 3px;
@@ -169,8 +163,8 @@ header { display: flex; align-items: center; gap: 10px; padding: 2px 2px 4px; fl
   border: 1px solid #454b57; border-radius: 5px;
   box-shadow: 0 3px 8px rgba(0,0,0,0.5);
 }
-.pitch-knob { height: 38px; }
-.vol-knob { height: 30px; }
+.pitch-knob { height: 42px; }
+.vol-knob { height: 26px; }
 .fader-knob::after {
   content: ''; position: absolute; left: 4px; right: 4px; top: 50%; height: 2px; margin-top: -1px;
   background: var(--alloy); border-radius: 1px;
@@ -210,30 +204,29 @@ header { display: flex; align-items: center; gap: 10px; padding: 2px 2px 4px; fl
 }
 .range-btn.wide { color: var(--amber); border-color: var(--amber); background: #2b2f38; }
 
-.ch-nudge { display: flex; flex-direction: column; gap: 6px; }
+.ch-nudge { display: flex; gap: 6px; }
 .nudge-btn {
-  min-height: 42px;
-  background: var(--platter); border: 1px solid var(--edge); border-radius: 8px;
-  color: var(--alloy); font-family: var(--font-display); font-size: 10px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+  flex: 1; min-height: 34px;
+  background: var(--platter); border: 1px solid var(--edge); border-radius: 7px;
+  color: var(--alloy); font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.02em; cursor: pointer;
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .nudge-btn:active, .nudge-btn.held { background: #2b2f38; border-color: var(--amber); color: var(--amber); }
-.nudge-hint { font-size: 10px; color: var(--alloy-dim); text-align: center; letter-spacing: 0.05em; margin-bottom: 12px; line-height: 1.5; }
 
 .ch-transport { display: flex; gap: 6px; align-items: center; }
 .cue-btn {
-  flex: 1; height: 46px; border-radius: 8px;
+  flex: 1; height: 38px; border-radius: 7px;
   background: var(--platter); border: 1px solid var(--edge); color: var(--alloy);
   font-family: var(--font-display); font-size: 10px; font-weight: 700;
-  letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
+  letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
 }
 .cue-btn:active { background: #2b2f38; border-color: var(--amber); color: var(--amber); }
 .play-btn {
-  width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
   background: radial-gradient(circle at 35% 30%, #2b2f38, var(--platter));
   border: 1px solid var(--edge); color: var(--alloy);
-  font-size: 16px; cursor: pointer;
+  font-size: 14px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 3px 8px rgba(0,0,0,0.4);
 }
@@ -290,10 +283,10 @@ header { display: flex; align-items: center; gap: 10px; padding: 2px 2px 4px; fl
 }
 .build-btn:active { background: #2b2f38; color: var(--amber); border-color: var(--amber); }
 
-.actions { display: flex; gap: 10px; }
+.actions { display: flex; gap: 8px; flex-shrink: 0; }
 .btn-primary, .btn-secondary {
-  flex: 1; min-width: 0; padding: 15px 10px; border-radius: 10px; cursor: pointer;
-  font-family: var(--font-display); font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  flex: 1; min-width: 0; padding: 9px 8px; border-radius: 8px; cursor: pointer;
+  font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
 }
 .btn-primary { background: var(--strobe); border: 1px solid #ff6b5f; color: #1a0704; }
 .btn-primary:active { background: #e6402f; }
