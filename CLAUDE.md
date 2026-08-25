@@ -49,6 +49,14 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   1210 simulator.
 - decodeAudioData survives only in decodeForAnalysis(), for BPM detection of
   untagged tracks. Nothing caches the result — one held buffer can kill the tab.
+- Writing el.playbackRate reconfigures the element's resampler, so it is
+  COALESCED to one write per RATE_MS (50) while dragging, flushed exactly on
+  pointerup. Measured riding the fader for 2s: 120 writes stalled the element
+  (a pause event, 0.44s of audio lost); 41 coalesced writes lost none. Never
+  move the write back into the pointermove handler.
+- Fader pixel sizes are measured into faderPx on layout change, never per move.
+  Reading clientHeight/getBoundingClientRect mid-drag forces a synchronous
+  layout every frame; a 120-move drag went from 120+ reads to 1.
 
 ## Architecture principles
 - Vanilla JS ES modules, no build step, no framework, no backend. Keep it that way.

@@ -421,18 +421,44 @@ function loadDeck(id, track) {
   d.el.src = d.url;
   d.el.load();
   d.el.addEventListener('loadedmetadata', () => {
+    killPitchPreservation(d.el);   // a new src can reset it; the rate path must not
     d.cuePoint = phraseStart(track, d.el.duration || 0);
     try { d.el.currentTime = d.cuePoint; } catch {}
+    d.rate = 0;                    // force the next commit through
     applyRate(id);
   }, { once: true });
 }
 
-function applyRate(id) {
+// Writing el.playbackRate re-configures the element's resampler. Doing it on
+// every pointermove made the audio stall and drop a pause event — measured: 120
+// writes over 2s lost 0.44s of audio, 41 coalesced writes lost none. So drags
+// mark the deck dirty and a timer commits at most one write per RATE_MS; the
+// exact value is flushed immediately when the finger lifts.
+// preservesPitch is NOT touched here: it's a per-element setting, and resetting
+// it alongside every rate write was pure churn.
+const RATE_MS = 50;
+const rateDirty = { A: false, B: false };
+let rateTimer = null;
+
+function commitRate(id) {
   const d = decks[id];
-  if (!round) return;
-  d.rate = rateFor(id);
-  killPitchPreservation(d.el);
-  try { d.el.playbackRate = d.rate; } catch {}
+  if (!round || !d.el) return;
+  const r = rateFor(id);
+  if (Math.abs(r - d.rate) < 1e-5) return;
+  d.rate = r;
+  try { d.el.playbackRate = r; } catch {}
+}
+function scheduleRate(id) {
+  rateDirty[id] = true;
+  if (rateTimer !== null) return;
+  rateTimer = setTimeout(() => {
+    rateTimer = null;
+    for (const x of DECKS) if (rateDirty[x]) { rateDirty[x] = false; commitRate(x); }
+  }, RATE_MS);
+}
+function applyRate(id) {          // immediate, for discrete changes and drag end
+  rateDirty[id] = false;
+  commitRate(id);
 }
 
 // Called straight from the click handler with nothing awaited before play(),
@@ -521,10 +547,27 @@ function setPitchRange(range) {
   updateButtons();
 }
 
+// Fader pixel sizes are measured once per layout change, not per pointermove:
+// reading clientHeight/offsetHeight mid-drag forces a synchronous layout on
+// every frame, which is most of what "lags terribly" was.
+const faderPx = { A: null, B: null };
+function measureFaders() {
+  for (const id of DECKS) {
+    faderPx[id] = {
+      pitchH: $('faderTrack' + id).clientHeight,
+      pitchKnob: $('faderKnob' + id).offsetHeight,
+      volH: $('volTrack' + id).clientHeight,
+      volKnob: $('volKnob' + id).offsetHeight,
+    };
+  }
+}
+
 function renderPitch(id) {
   const d = decks[id];
-  const track = $('faderTrack' + id), knob = $('faderKnob' + id);
-  const h = track.clientHeight - knob.offsetHeight;
+  const knob = $('faderKnob' + id);
+  if (!faderPx[id]) measureFaders();
+  const m = faderPx[id];
+  const h = m.pitchH - m.pitchKnob;
   knob.style.top = `${((d.fader + pitchRange) / (pitchRange * 2)) * h}px`;
   const shown = d.fader + d.nudge;
   const readout = $('pitchReadout' + id);
@@ -537,12 +580,14 @@ function renderPitch(id) {
 }
 function renderLevel(id) {
   const d = decks[id];
-  const track = $('volTrack' + id), knob = $('volKnob' + id);
-  const h = track.clientHeight - knob.offsetHeight;
-  knob.style.top = `${((100 - d.vol) / 100) * h}px`;
+  if (!faderPx[id]) measureFaders();
+  const m = faderPx[id];
+  const h = m.volH - m.volKnob;
+  $('volKnob' + id).style.top = `${((100 - d.vol) / 100) * h}px`;
   $('volReadout' + id).textContent = String(Math.round(d.vol));
 }
 function renderAllFaders() {
+  measureFaders();
   for (const id of DECKS) { renderPitch(id); renderLevel(id); }
 }
 
@@ -556,33 +601,37 @@ function renderAllFaders() {
 const FINE_FALLOFF = 30;      // px sideways to halve sensitivity
 function fineFactor(dx) { return 1 / (1 + Math.abs(dx) / FINE_FALLOFF); }
 
-function bindVFader(track, knob, onValue, { fine = false, onFine = null } = {}) {
-  let dragging = false, frac = 0, lastY = 0;
-  const geom = () => {
-    const rect = track.getBoundingClientRect();
-    return { rect, usable: rect.height - knob.offsetHeight, kh: knob.offsetHeight };
-  };
+function bindVFader(track, knob, onValue, { fine = false, onFine = null, onEnd = null } = {}) {
+  let dragging = false, frac = 0, lastY = 0, box = null;
   const clamp = v => Math.max(0, Math.min(1, v));
 
   track.addEventListener('pointerdown', e => {
     dragging = true;
     try { track.setPointerCapture(e.pointerId); } catch {}
-    const { rect, usable, kh } = geom();
-    frac = clamp((e.clientY - rect.top - kh / 2) / usable);   // jump to finger
+    // Measured once per drag. Nothing can resize the fader mid-drag, and reading
+    // it per move was forcing layout on every frame.
+    const rect = track.getBoundingClientRect();
+    box = { top: rect.top, cx: rect.left + rect.width / 2,
+            usable: rect.height - knob.offsetHeight, kh: knob.offsetHeight };
+    frac = clamp((e.clientY - box.top - box.kh / 2) / box.usable);   // jump to finger
     lastY = e.clientY;
     onValue(frac);
     if (onFine) onFine(1);
   });
   track.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    const { rect, usable } = geom();
-    const f = fine ? fineFactor(e.clientX - (rect.left + rect.width / 2)) : 1;
-    frac = clamp(frac + ((e.clientY - lastY) / usable) * f);
+    if (!dragging || !box) return;
+    const f = fine ? fineFactor(e.clientX - box.cx) : 1;
+    frac = clamp(frac + ((e.clientY - lastY) / box.usable) * f);
     lastY = e.clientY;
     onValue(frac);
     if (onFine) onFine(f);
   });
-  const end = () => { dragging = false; if (onFine) onFine(1); };
+  const end = () => {
+    if (!dragging) return;
+    dragging = false; box = null;
+    if (onFine) onFine(1);
+    if (onEnd) onEnd();
+  };
   track.addEventListener('pointerup', end);
   track.addEventListener('pointercancel', end);
 }
@@ -597,10 +646,11 @@ for (const id of DECKS) {
     // precision is the point. The lamp still reports when you're at zero.
     decks[id].fader = +(frac * pitchRange * 2 - pitchRange).toFixed(3);
     renderPitch(id);
-    applyRate(id);
+    scheduleRate(id);
   }, {
     fine: true,
     onFine: f => $('pitchReadout' + id).classList.toggle('fine', f < 0.9),
+    onEnd: () => applyRate(id),      // land on the exact value the finger left
   });
   bindVFader($('volTrack' + id), $('volKnob' + id), frac => {
     decks[id].vol = Math.round((1 - frac) * 100);
@@ -753,7 +803,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v7';
+const APP_BUILD = 'bmt-v8';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
