@@ -231,6 +231,9 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
   box-shadow: 0 3px 8px rgba(0,0,0,0.4);
 }
 .play-btn.playing { border-color: var(--strobe); color: var(--strobe); box-shadow: 0 0 12px rgba(255,74,60,0.25); }
+/* Decoding takes a moment; say so rather than swallowing the tap. */
+.play-btn.loading { color: #4a4f59; border-style: dashed; }
+.cue-btn.held { background: #2b2f38; border-color: var(--amber); color: var(--amber); }
 .play-btn:active { transform: scale(0.96); }
 
 /* Narrow phones: keep both channels on screen by shrinking the faders. */

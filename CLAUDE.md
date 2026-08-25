@@ -36,27 +36,42 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
   which the file picker accepts alongside audio. No grid → old 25%-in fallback.
 
-## Audio architecture (do not "optimise" back)
-- Decks STREAM through an <audio> element into a MediaElementAudioSourceNode.
-  Never go back to decodeAudioData + AudioBufferSourceNode for playback:
-  decoding expands compressed audio to float32 PCM, so a 22 MB / 9 min MP3
-  becomes 216 MB in RAM and two decks 425 MB. iOS Safari kills the page well
-  before that — it presented as "can't decode this file" plus silence on the
-  phone while working fine on a desktop. Streaming holds a few MB per deck.
-- Media elements time-stretch by default. preservesPitch = false (plus the
-  webkit/moz prefixes) is REQUIRED on every element and must be re-applied when
-  the rate changes, or pitch stops following tempo and the app stops being a
-  1210 simulator.
-- decodeAudioData survives only in decodeForAnalysis(), for BPM detection of
-  untagged tracks. Nothing caches the result — one held buffer can kill the tab.
-- Writing el.playbackRate reconfigures the element's resampler, so it is
-  COALESCED to one write per RATE_MS (50) while dragging, flushed exactly on
-  pointerup. Measured riding the fader for 2s: 120 writes stalled the element
-  (a pause event, 0.44s of audio lost); 41 coalesced writes lost none. Never
-  move the write back into the pointermove handler.
+## Audio architecture (both naive options are wrong — measured)
+Playback is an AudioBufferSourceNode fed from a WINDOWED MONO buffer. Both
+obvious alternatives were tried on real tracks and both failed:
+- Full-track decodeAudioData: 22 MB / 9 min MP3 -> 216 MB of float32 PCM, two
+  decks 425 MB. iOS Safari kills the page — presented as "can't decode this
+  file" plus silence on the phone while fine on a desktop.
+- <audio> + MediaElementAudioSourceNode: memory fine, but writing playbackRate
+  reconfigures the element's resampler. Riding the fader for 2s with 120 writes
+  fired a pause event and lost 0.44s of audio. Coalescing helped but never got
+  to zero, and seeking to the phrase start was only frame-accurate.
+
+What works, and why each part is load-bearing:
+- AudioContext at CTX_RATE (32 kHz). decodeAudioData resamples AS it decodes,
+  so this bounds the transient, not just what we keep: 216 MB -> 144 MB.
+- Immediately copy a WINDOW_S (180 s) MONO window out of the decoded buffer and
+  drop the full one: 23 MB per deck, 46 MB for both. Mono is free — the split
+  panner puts each deck hard L/R anyway.
+- The window STARTS at phraseStart(), so buffer offset 0 IS the downbeat. That
+  is what makes playback start on beat 1 rather than near it, and it makes the
+  cue point exactly 0.
+- playbackRate on a source node is an AudioParam: writing it on every pointermove
+  is glitch-free (measured 120 writes, 0 silent frames). Do NOT reintroduce rate
+  coalescing — that was a workaround for the media element and only adds lag.
+- Decodes are sequenced through loadChain so two full-size buffers never coexist,
+  and a per-deck token discards results from a superseded round.
+- decodeForAnalysis() still full-decodes for BPM detection of untagged tracks.
+  Nothing caches it — one held full buffer can kill the tab.
 - Fader pixel sizes are measured into faderPx on layout change, never per move.
   Reading clientHeight/getBoundingClientRect mid-drag forces a synchronous
   layout every frame; a 120-move drag went from 120+ reads to 1.
+
+## Cue behaviour (matches CDJ/turntable convention)
+- Playing + tap Cue -> back-cue: jump to the cue point and stop.
+- Stopped + hold Cue -> preview from the cue point; release snaps back and stops.
+- Cue point is buffer offset 0, i.e. the phrase start. Play resumes from wherever
+  the deck was stopped.
 
 ## Architecture principles
 - Vanilla JS ES modules, no build step, no framework, no backend. Keep it that way.
