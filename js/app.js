@@ -871,7 +871,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v12';
+const APP_BUILD = 'bmt-v13';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
