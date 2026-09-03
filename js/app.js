@@ -207,6 +207,12 @@ fileInput.addEventListener('change', async (e) => {
 });
 
 function renderLibrary() {
+  // Detection is opt-in: it full-decodes a track (~144 MB) to analyse it, so it
+  // must never run unprompted at startup on a phone.
+  const untagged = tracks.filter(t => !t.bpm).length;
+  const btn = $('detectBtn');
+  btn.style.display = untagged ? 'block' : 'none';
+  btn.textContent = `Detect BPM for ${untagged} untagged track${untagged > 1 ? 's' : ''}`;
   trackList.classList.toggle('hidden', tracks.length === 0);
   $('emptyLib').style.display = tracks.length ? 'none' : 'block';
   libMeta.textContent = tracks.length
@@ -329,7 +335,7 @@ function startRound(keepPair = false) {
   round = { aId: a.id, bId: b.id, hidden, r0 };
   for (const id of DECKS) {
     const d = decks[id];
-    d.fader = 0; d.nudge = 0; d.rate = 1; d.cuePoint = 0;
+    d.fader = 0; d.nudge = 0; d.rate = 1; d.cuePoint = 0; d.previewing = false;
   }
   renderAllFaders();
   updateButtons();
@@ -843,6 +849,17 @@ function openSheet(on) {
   $('sheet').classList.toggle('show', on);
   $('menuBtn').setAttribute('aria-expanded', String(on));
 }
+$('detectBtn').addEventListener('click', async () => {
+  const btn = $('detectBtn');
+  btn.disabled = true;
+  const before = tracks.filter(t => !t.bpm).length;
+  await detectMissingBPMs();
+  const after = tracks.filter(t => !t.bpm).length;
+  btn.disabled = false;
+  toast(before - after > 0
+    ? `Detected BPM for ${before - after} track${before - after > 1 ? 's' : ''}.`
+    : 'Could not detect a tempo — type it in instead.');
+});
 $('menuBtn').addEventListener('click', () => openSheet(true));
 $('sheetClose').addEventListener('click', () => openSheet(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(false); });
@@ -850,7 +867,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v10';
+const APP_BUILD = 'bmt-v11';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -898,7 +915,6 @@ async function init() {
     tracks = await db.getAllTracks();
   } catch { tracks = []; }
   renderLibrary();
-  detectMissingBPMs();
   updateButtons();
   if (canStart()) startRound();
   // An empty mixer has no visible way in, so show the crate on first run.

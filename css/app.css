@@ -10,7 +10,9 @@
   --amber: #f0b429;
   --font-display: 'Chakra Petch', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
-  --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+  /* System stack for body text: IBM Plex Sans cost 194 KB to style a single
+     rule. On iOS this renders as San Francisco, which is free and native. */
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* The mixer is a fixed, non-scrolling surface: on a touchscreen any page scroll
@@ -76,6 +78,13 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
   padding: 11px 16px; cursor: pointer; user-select: none;
 }
 .file-btn:active { background: #282c35; }
+.detect-btn {
+  margin-top: 10px; width: 100%; padding: 10px;
+  background: var(--platter); border: 1px solid var(--edge); border-radius: 8px;
+  color: var(--alloy); font-family: var(--font-display); font-size: 11px;
+  font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+}
+.detect-btn:active { border-color: var(--amber); color: var(--amber); }
 .lib-meta { font-family: var(--font-mono); font-size: 11px; color: var(--alloy-dim); margin-top: 10px; }
 .track-list { margin-top: 10px; max-height: 170px; overflow-y: auto; border-top: 1px solid var(--edge); }
 .track-row { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-bottom: 1px solid rgba(49,53,63,0.5); }
@@ -317,7 +326,7 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 .reveal-score.good { color: var(--lock); }
 .reveal-score.mid { color: var(--amber); }
 .reveal-score.bad { color: var(--strobe); }
-.reveal-sub { font-family: var(--font-display); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--alloy-dim); margin-top: 4px; }
+.reveal-sub { font-weight: 600; font-family: var(--font-display); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--alloy-dim); margin-top: 4px; }
 .reveal-detail { font-family: var(--font-mono); font-size: 12px; color: var(--alloy); margin-top: 16px; line-height: 1.7; }
 .reveal-detail span { color: var(--alloy-dim); }
 
