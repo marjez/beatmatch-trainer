@@ -1,6 +1,6 @@
 // sw.js — offline support. App shell is precached; fonts cached on first use.
 // Audio never touches the network: it lives in IndexedDB.
-const CACHE = 'bmt-v9';
+const CACHE = 'bmt-v10';
 
 self.addEventListener('message', e => {
   if (e.data === 'skipWaiting') self.skipWaiting();

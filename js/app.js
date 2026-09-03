@@ -608,7 +608,7 @@ function renderPitch(id) {
   if (!faderPx[id]) measureFaders();
   const m = faderPx[id];
   const h = m.pitchH - m.pitchKnob;
-  knob.style.top = `${((d.fader + pitchRange) / (pitchRange * 2)) * h}px`;
+  knob.style.transform = `translate3d(0, ${((d.fader + pitchRange) / (pitchRange * 2)) * h}px, 0)`;
   const shown = d.fader + d.nudge;
   const readout = $('pitchReadout' + id);
   readout.textContent = `${shown >= 0 ? '+' : ''}${shown.toFixed(2)}%`;
@@ -623,7 +623,7 @@ function renderLevel(id) {
   if (!faderPx[id]) measureFaders();
   const m = faderPx[id];
   const h = m.volH - m.volKnob;
-  $('volKnob' + id).style.top = `${((100 - d.vol) / 100) * h}px`;
+  $('volKnob' + id).style.transform = `translate3d(0, ${((100 - d.vol) / 100) * h}px, 0)`;
   $('volReadout' + id).textContent = String(Math.round(d.vol));
 }
 function renderAllFaders() {
@@ -641,60 +641,68 @@ function renderAllFaders() {
 const FINE_FALLOFF = 30;      // px sideways to halve sensitivity
 function fineFactor(dx) { return 1 / (1 + Math.abs(dx) / FINE_FALLOFF); }
 
-function bindVFader(track, knob, onValue, { fine = false, onFine = null, onEnd = null } = {}) {
-  let dragging = false, frac = 0, lastY = 0, box = null;
+// Faders drag RELATIVELY: pressing anywhere anchors, and only movement changes
+// the value. The old code jumped the value to wherever you touched, which made
+// small corrections impossible — you could never rest a thumb without throwing
+// the setting. The whole track stays grabbable, so there's no fiddly knob-sized
+// target to hit, but nothing moves until you move.
+function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
+  let dragging = false, frac = 0, lastY = 0, box = null, raf = null, pendingFine = 1;
   const clamp = v => Math.max(0, Math.min(1, v));
+
+  const flush = () => {
+    raf = null;
+    set(frac);
+    if (onFine) onFine(pendingFine);
+  };
 
   track.addEventListener('pointerdown', e => {
     dragging = true;
     try { track.setPointerCapture(e.pointerId); } catch {}
-    // Measured once per drag. Nothing can resize the fader mid-drag, and reading
-    // it per move was forcing layout on every frame.
+    // Geometry read once per drag; reading it per move forces a layout a frame.
     const rect = track.getBoundingClientRect();
-    box = { top: rect.top, cx: rect.left + rect.width / 2,
-            usable: rect.height - knob.offsetHeight, kh: knob.offsetHeight };
-    frac = clamp((e.clientY - box.top - box.kh / 2) / box.usable);   // jump to finger
+    box = { cx: rect.left + rect.width / 2, usable: rect.height - knob.offsetHeight };
+    frac = clamp(get());          // start from where the fader actually is
     lastY = e.clientY;
-    onValue(frac);
-    if (onFine) onFine(1);
+    pendingFine = 1;
   });
   track.addEventListener('pointermove', e => {
     if (!dragging || !box) return;
-    const f = fine ? fineFactor(e.clientX - box.cx) : 1;
-    frac = clamp(frac + ((e.clientY - lastY) / box.usable) * f);
+    pendingFine = fine ? fineFactor(e.clientX - box.cx) : 1;
+    frac = clamp(frac + ((e.clientY - lastY) / box.usable) * pendingFine);
     lastY = e.clientY;
-    onValue(frac);
-    if (onFine) onFine(f);
+    // Coalesce paints to one per frame; the audio write inside set() is cheap.
+    if (raf === null) raf = requestAnimationFrame(flush);
   });
   const end = () => {
     if (!dragging) return;
     dragging = false; box = null;
-    if (onFine) onFine(1);
-    if (onEnd) onEnd();
+    if (raf !== null) { cancelAnimationFrame(raf); raf = null; }
+    pendingFine = 1;
+    flush();
   };
   track.addEventListener('pointerup', end);
   track.addEventListener('pointercancel', end);
 }
 
 for (const id of DECKS) {
-  bindVFader($('faderTrack' + id), $('faderKnob' + id), frac => {
-    // PITCH_FLIP: frac 0 is the top of the track and maps to MINUS, frac 1 is
-    // the bottom and maps to PLUS — the SL-1210 layout, where pulling the fader
-    // toward you speeds the deck up. Inverting this means inverting the tick
-    // positions and the knob position with it.
-    // No snap: a detent you can feel is one you can't be precise inside, and
-    // precision is the point. The lamp still reports when you're at zero.
-    decks[id].fader = +(frac * pitchRange * 2 - pitchRange).toFixed(3);
-    renderPitch(id);
-    applyRate(id);          // AudioParam write — safe on every move, no glitch
-  }, {
+  bindVFader($('faderTrack' + id), $('faderKnob' + id), {
+    get: () => (decks[id].fader + pitchRange) / (pitchRange * 2),
+    set: frac => {
+      decks[id].fader = +(frac * pitchRange * 2 - pitchRange).toFixed(3);
+      renderPitch(id);
+      applyRate(id);      // AudioParam write — safe on every move, no glitch
+    },
     fine: true,
     onFine: f => $('pitchReadout' + id).classList.toggle('fine', f < 0.9),
   });
-  bindVFader($('volTrack' + id), $('volKnob' + id), frac => {
-    decks[id].vol = Math.round((1 - frac) * 100);
-    renderLevel(id);
-    if (decks[id].gain) decks[id].gain.gain.value = decks[id].vol / 100;
+  bindVFader($('volTrack' + id), $('volKnob' + id), {
+    get: () => 1 - decks[id].vol / 100,
+    set: frac => {
+      decks[id].vol = Math.round((1 - frac) * 100);
+      renderLevel(id);
+      if (decks[id].gain) decks[id].gain.gain.value = decks[id].vol / 100;
+    },
   });
 }
 
@@ -842,7 +850,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v9';
+const APP_BUILD = 'bmt-v10';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;

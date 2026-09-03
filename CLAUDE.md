@@ -29,9 +29,15 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 - There is NO zero snap. A detent you can feel is one you can't be precise
   inside, and 0.1 BPM is ~2px of raw fader travel. The green lamp reports being
   within DETENT_BPM of zero instead of snapping there. Don't reintroduce a snap.
+- Faders drag RELATIVELY. Pressing anchors, only movement changes the value.
+  Do NOT reintroduce jump-to-finger: it made small corrections impossible, since
+  the first touch threw the setting wherever the thumb landed.
 - Pitch faders have fine-drag: horizontal distance from the fader scales vertical
-  sensitivity (1/(1+dx/30)). Movement is integrated incrementally, never
-  recomputed from the press point, or changing scale mid-drag makes the knob jump.
+  sensitivity (1/(1+dx/30)) — 0.038 BPM/px straight down, 0.008 BPM/px at 120px
+  out. Movement is integrated incrementally, never recomputed from the press
+  point, or changing scale mid-drag makes the knob jump.
+- Knobs move via transform: translate3d and paints are coalesced to one rAF per
+  frame. Writing .top instead re-runs layout on every move.
 - Playback starts at phraseStart(): a whole number of 4-bar phrases from the
   Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
   which the file picker accepts alongside audio. No grid → old 25%-in fallback.
@@ -95,9 +101,9 @@ What works, and why each part is load-bearing:
   Nudge is excluded — it's a momentary bend, not part of the answer. So there is
   no single "correct fader position" any more; deck 2 has to sit wherever cancels
   the hidden offset relative to wherever deck 1 is.
-- Cue returns a deck to its cuePoint (the round's start offset, ~25% in). Play
-  resumes from where it stopped, so playhead position is tracked in decks[id].offset
-  via markPosition() — always mark BEFORE changing rate or the position drifts.
+- Cue behaviour is described under "Cue behaviour" above. Playhead position is
+  tracked in decks[id].offset via markPosition() — always mark BEFORE changing
+  rate or the position drifts.
 - Two-track pairing is restricted to tracks whose r0 sits inside the fader range
   (|bpmA/bpmB − 1| ≤ pitchRange%), so every pair is one you could actually mix on
   the 1210s. Without it a mixed house/hip-hop crate deals 126-vs-90 pairs and
@@ -106,7 +112,7 @@ What works, and why each part is load-bearing:
   headline is "N.NN BPM off" (owner's preferred metric — no score out of 100).
   Falls back to percent only if deck A has no BPM. Color bands: good ≤ 0.05 BPM,
   mid ≤ 0.3 BPM, bad above. Rounds store saves {err, errBpm}.
-- Nudge is temporary (±1% while held), snaps back on release — like platter touch.
+- Nudge is temporary (±2% while held), snaps back on release — like platter touch.
 - BPM priority: filename "NNNbpm" > manual entry > auto-detection
   (web-audio-beat-detector, vendored, constrained 80–159; the old lowpass peak
   histogram survives as detectBPMFallback only). Rekordbox-exported names preferred.
