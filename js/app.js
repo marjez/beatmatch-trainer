@@ -215,8 +215,10 @@ function renderLibrary() {
   btn.textContent = `Detect BPM for ${untagged} untagged track${untagged > 1 ? 's' : ''}`;
   trackList.classList.toggle('hidden', tracks.length === 0);
   $('emptyLib').style.display = tracks.length ? 'none' : 'block';
+  const gridded = tracks.filter(t => typeof t.anchor === 'number').length;
   libMeta.textContent = tracks.length
-    ? `${tracks.length} track${tracks.length > 1 ? 's' : ''} in your crate (stored on this device)`
+    ? `${tracks.length} track${tracks.length > 1 ? 's' : ''} in your crate · ${gridded} with a beat grid`
+      + (gridded < tracks.length ? ' — add crate.json for downbeat starts' : '')
     : '';
   trackList.innerHTML = '';
   tracks.forEach((t) => {
@@ -224,6 +226,10 @@ function renderLibrary() {
     row.className = 'track-row';
     const name = document.createElement('div');
     name.className = 'track-name'; name.textContent = t.name;
+    if (typeof t.anchor !== 'number') {
+      name.textContent = '⚠ ' + t.name;
+      name.title = 'No beat grid — playback starts by guesswork, not on a downbeat';
+    }
     const bpm = document.createElement('input');
     bpm.className = 'track-bpm' + (t.bpmSource === 'auto' ? ' detected' : '');
     bpm.type = 'text'; bpm.inputMode = 'decimal';
@@ -871,7 +877,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v13';
+const APP_BUILD = 'bmt-v14';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
