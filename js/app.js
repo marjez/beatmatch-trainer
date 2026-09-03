@@ -667,14 +667,18 @@ function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
     try { track.setPointerCapture(e.pointerId); } catch {}
     // Geometry read once per drag; reading it per move forces a layout a frame.
     const rect = track.getBoundingClientRect();
-    box = { cx: rect.left + rect.width / 2, usable: rect.height - knob.offsetHeight };
+    // Fine-drag is measured from WHERE YOU PRESSED, not from the track's centre.
+    // Measuring from the centre meant simply grabbing the fader off-centre — up
+    // to 39px on a 78px-wide track — silently halved sensitivity for the whole
+    // drag, so the knob lagged behind the finger for no visible reason.
+    box = { startX: e.clientX, usable: rect.height - knob.offsetHeight };
     frac = clamp(get());          // start from where the fader actually is
     lastY = e.clientY;
     pendingFine = 1;
   });
   track.addEventListener('pointermove', e => {
     if (!dragging || !box) return;
-    pendingFine = fine ? fineFactor(e.clientX - box.cx) : 1;
+    pendingFine = fine ? fineFactor(e.clientX - box.startX) : 1;
     frac = clamp(frac + ((e.clientY - lastY) / box.usable) * pendingFine);
     lastY = e.clientY;
     // Coalesce paints to one per frame; the audio write inside set() is cheap.
@@ -867,7 +871,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v11';
+const APP_BUILD = 'bmt-v12';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
