@@ -36,8 +36,12 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   sensitivity (1/(1+dx/30)) — 0.038 BPM/px straight down, 0.008 BPM/px at 120px
   out. Movement is integrated incrementally, never recomputed from the press
   point, or changing scale mid-drag makes the knob jump.
-- Knobs move via transform: translate3d and paints are coalesced to one rAF per
-  frame. Writing .top instead re-runs layout on every move.
+- Knobs move via transform: translate3d, written SYNCHRONOUSLY in the pointermove
+  handler. Do NOT batch fader paints to requestAnimationFrame: measured, it added
+  a median 4.9 ms / max 15 ms of latency and collapsed 150 move events into 82
+  paints, throwing away half the finger movement. There is nothing to batch — the
+  handler only writes transform and textContent and never reads geometry, so it
+  cannot force layout. Writing .top instead WOULD re-run layout on every move.
 - Playback starts at phraseStart(): a whole number of 4-bar phrases from the
   Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
   which the file picker accepts alongside audio. No grid → old 25%-in fallback.
