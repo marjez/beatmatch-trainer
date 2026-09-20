@@ -1301,8 +1301,14 @@ function renderStatsTable(rows) {
     const row = document.createElement('div');
     row.className = 'history-row';
     const d = new Date(r.at);
-    row.innerHTML = `<span>${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${r.aName || '?'} / ${r.bName || '?'}</span>` +
-      `<span>${r.difficulty === 'hard' ? 'fine' : 'wide'} ±${r.pitchRange || 8}</span><b>${Math.abs(r.errBpm).toFixed(2)}</b>`;
+    // textContent, not innerHTML: names are filenames the user picked.
+    const who = document.createElement('span');
+    who.textContent = `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${r.aName || '?'} / ${r.bName || '?'}`;
+    const how = document.createElement('span');
+    how.textContent = `${r.difficulty === 'hard' ? 'fine' : 'wide'} ±${r.pitchRange || 8}`;
+    const val = document.createElement('b');
+    val.textContent = Math.abs(r.errBpm).toFixed(2);
+    row.append(who, how, val);
     t.appendChild(row);
   });
 }
@@ -1343,7 +1349,11 @@ function renderStatsChart(rows, abs) {
   const tip = $('statsTip');
   const show = (i, cx, cy) => {
     const r = rows[i];
-    tip.innerHTML = `<b>${Math.abs(r.errBpm).toFixed(2)} BPM off</b> · ${r.errBpm > 0 ? 'fast' : 'slow'}<br>${fmt(r.at)} · ${r.difficulty === 'hard' ? 'fine' : 'wide'} offset ±${r.pitchRange || 8}<br>${r.aName || '?'}<br>${r.bName || '?'}`;
+    tip.textContent = '';
+    const head = document.createElement('b'); head.textContent = `${Math.abs(r.errBpm).toFixed(2)} BPM off`;
+    tip.append(head, ` · ${r.errBpm > 0 ? 'fast' : 'slow'}`, document.createElement('br'),
+               `${fmt(r.at)} · ${r.difficulty === 'hard' ? 'fine' : 'wide'} offset ±${r.pitchRange || 8}`, document.createElement('br'),
+               r.aName || '?', document.createElement('br'), r.bName || '?');
     tip.hidden = false;
     // Positioned within #statsPanel (position: relative), above and near the dot.
     const wr = wrap.getBoundingClientRect(), sx = wr.width / W;

@@ -60,7 +60,10 @@ def serve(directory: Path, port: int, out: Path, mounts=None):
             for prefix, root in mounts.items():
                 if clean.startswith(f"/{prefix}/"):
                     rel = clean[len(prefix) + 2:]
-                    return str(root / urllib.parse.unquote(rel))
+                    target = (root / urllib.parse.unquote(rel)).resolve()
+                    if root not in target.parents and target != root:
+                        return str(root / "__outside_mount__")     # confine to the mount
+                    return str(target)
             return super().translate_path(path)
 
         def end_headers(self):
