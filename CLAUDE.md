@@ -43,9 +43,12 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   let the knob drift away from the finger until you were dragging at the top of
   the fader while the knob sat at the bottom. Don't go back to either.
 - Pitch faders have fine-drag: horizontal distance from the fader scales vertical
-  sensitivity (1/(1+dx/30)) — 0.038 BPM/px straight down, 0.008 BPM/px at 120px
-  out. Movement is integrated incrementally, never recomputed from the press
-  point, or changing scale mid-drag makes the knob jump.
+  sensitivity, with a 36 px DEAD ZONE first (1/(1+max(0,|dx|−36)/30)): on the
+  phone a thumb moving straight down drifts 20-40 px sideways and fine mode was
+  engaging uninvited ("the knob moves less than my thumb", v19 phone pass).
+  Beyond the dead zone: half speed at 66 px out, a quarter at ~126 px. Movement
+  is integrated incrementally, never recomputed from the press point, or
+  changing scale mid-drag makes the knob jump.
 - Knobs move via transform: translate3d, written SYNCHRONOUSLY in the pointermove
   handler. Do NOT batch fader paints to requestAnimationFrame: measured, it added
   a median 4.9 ms / max 15 ms of latency and collapsed 150 move events into 82

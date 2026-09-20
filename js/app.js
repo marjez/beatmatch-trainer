@@ -1043,8 +1043,16 @@ function renderAllFaders() {
 // Needed because 0.1 BPM is ~2px of raw travel — too fine for a fingertip.
 // Movement is integrated incrementally rather than recomputed from the anchor,
 // so changing the scale mid-drag doesn't make the knob jump.
-const FINE_FALLOFF = 30;      // px sideways to halve sensitivity
-function fineFactor(dx) { return 1 / (1 + Math.abs(dx) / FINE_FALLOFF); }
+// A thumb moving "straight" down wanders 20-40 px sideways on its own, and on
+// the phone that read as "the knob moves less than my thumb" — fine mode was
+// engaging uninvited. The first FINE_DEADZONE px of sideways travel do nothing;
+// the falloff starts beyond it, so deliberate fine control is unchanged.
+const FINE_DEADZONE = 36;     // px of sideways drift ignored
+const FINE_FALLOFF = 30;      // px beyond the dead zone to halve sensitivity
+function fineFactor(dx) {
+  const d = Math.max(0, Math.abs(dx) - FINE_DEADZONE);
+  return 1 / (1 + d / FINE_FALLOFF);
+}
 
 // Faders drag RELATIVELY: pressing anywhere anchors, and only movement changes
 // the value. The old code jumped the value to wherever you touched, which made
