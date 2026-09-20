@@ -171,7 +171,6 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 /* The pitch fader is the instrument here — give it the width and let level be
    the thin one. Wider track means a wider knob and steadier thumb control. */
 .pitch-track { width: 78px; }
-.vol-track { width: 26px; }
 .fader-scale { position: absolute; inset: 0; }
 .fader-tick { position: absolute; left: 5px; right: 5px; height: 1px; background: #3a3f4a; }
 .fader-tick.zero { background: var(--alloy-dim); height: 2px; }
@@ -188,11 +187,22 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 }
 .pitch-knob { height: 42px; }
 .fader-knob.grabbed { border-color: var(--amber); box-shadow: 0 0 10px rgba(240,180,41,0.35), 0 3px 8px rgba(0,0,0,0.5); }
-.vol-knob { height: 26px; }
 .fader-knob::after {
   content: ''; position: absolute; left: 4px; right: 4px; top: 50%; height: 2px; margin-top: -1px;
   background: var(--alloy); border-radius: 1px;
 }
+
+/* Crossfader: horizontal, grabbed by its knob like the pitch faders. The knob
+   is a vertical bar with a centre line, and a tick marks the centre position. */
+.xfader { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 2px; }
+.xf-label {
+  font-family: var(--font-display); font-weight: 700; font-size: 11px; color: var(--alloy-dim);
+  width: 14px; text-align: center; flex-shrink: 0; user-select: none; -webkit-user-select: none;
+}
+.xf-track { flex: 1; min-height: 0; height: 36px; }
+.xf-centre { position: absolute; left: 50%; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; background: #3a3f4a; }
+.xf-knob { top: 3px; bottom: 3px; left: 0; right: auto; width: 34px; }
+.xf-knob::after { left: 50%; right: auto; top: 5px; bottom: 5px; height: auto; width: 2px; margin: 0 0 0 -1px; }
 
 /* Zero detent lamp, mirroring the 1210's centre click + LED. */
 .zero-led {
@@ -208,7 +218,7 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 }
 
 /* Both readouts share a height so the two fader tracks end level. */
-.pitch-readout, .vol-readout {
+.pitch-readout {
   height: 26px; width: 100%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono);
@@ -219,7 +229,6 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 }
 .pitch-readout.detent { color: var(--lock); }
 .pitch-readout.fine { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
-.vol-readout { font-size: 11px; color: var(--alloy-dim); }
 .range-btn {
   flex-shrink: 0; padding: 0 12px;
   background: var(--platter); border: 1px solid var(--edge); border-radius: 8px;
@@ -262,8 +271,7 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 
 /* Narrow phones: keep both channels on screen by shrinking the faders. */
 @media (max-width: 380px) {
-  .pitch-track { width: 48px; }
-  .vol-track { width: 28px; }
+  .pitch-track { width: 60px; }
   .channel { padding: 8px 6px; }
   .nudge-btn { min-height: 38px; }
 }

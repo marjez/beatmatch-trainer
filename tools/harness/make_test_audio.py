@@ -91,7 +91,12 @@ def render(bpm, seconds, intro, snare, hat_amp, rng, sr=SR):
 
 
 def write_wav(path, buf, sr=SR):
-    a = array.array("h", (max(-32767, min(32767, int(v * 30000))) for v in buf))
+    # Normalise so the file itself never clips: kick + snare + drone can sum past
+    # full scale on beats 2 and 4, and a clipped source would make the chain's
+    # clipping measurement meaningless.
+    peak = max(abs(v) for v in buf) or 1.0
+    scale = 30000 * min(1.0, 0.95 / peak)
+    a = array.array("h", (max(-32767, min(32767, int(v * scale))) for v in buf))
     w = wave.open(path, "w")
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr)
     w.writeframes(a.tobytes())

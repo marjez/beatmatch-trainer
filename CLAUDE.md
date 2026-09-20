@@ -182,10 +182,14 @@ What works, and why each part is load-bearing:
   perfect match. Both the filename parser and tools/rekordbox_export.py keep the
   fraction — don't "tidy" either back to integers.
 
-## Built (was roadmap 1–2)
+## Built (was roadmap 1–2, 6)
 - Headphone split toggle: StereoPannerNode per deck, A hard left / B hard right,
   off by default, persisted in the settings store.
 - BPM detection uses vendored web-audio-beat-detector.
+- Crossfader (2026-09-20) replaced the two channel faders: equal-power curve,
+  centre = both decks at cos(π/4), position persisted as setting 'xfade'. The
+  pitch faders got the width back. bindFader takes axis 'x'|'y'; the grab-the-
+  knob and no-rAF rules apply to it exactly as to the pitch faders.
 
 ## Open threads (as of 2026-09-20)
 - Overnight branch `overnight-2026-09-20` (Linux box): latency-first transport,
@@ -217,7 +221,6 @@ What works, and why each part is load-bearing:
 3. Beat-phase scoring: score not just tempo but beat alignment (onset offset at reveal).
 4. Daily challenge: seeded pair-of-the-day from own crate (date-seeded PRNG), streak counter.
 5. Stats page: all-time chart from the rounds store (score over time, by mode/difficulty).
-6. Crossfader instead of two level sliders.
 7. Crate manager: tag tracks, filter pairs by tag (mirrors Rekordbox playlists).
 8. Export/import crate metadata as JSON (not audio) for device migration.
 

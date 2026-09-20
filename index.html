@@ -36,12 +36,6 @@
           </div>
           <div class="pitch-readout" id="pitchReadoutA">+0.00%</div>
         </div>
-        <div class="fader-unit">
-          <div class="fader-track vol-track" id="volTrackA">
-            <div class="fader-knob vol-knob" id="volKnobA"></div>
-          </div>
-          <div class="vol-readout" id="volReadoutA">85</div>
-        </div>
       </div>
 
       <div class="ch-nudge">
@@ -66,12 +60,6 @@
           </div>
           <div class="pitch-readout" id="pitchReadoutB">+0.00%</div>
         </div>
-        <div class="fader-unit">
-          <div class="fader-track vol-track" id="volTrackB">
-            <div class="fader-knob vol-knob" id="volKnobB"></div>
-          </div>
-          <div class="vol-readout" id="volReadoutB">85</div>
-        </div>
       </div>
 
       <div class="ch-nudge">
@@ -86,6 +74,17 @@
       </div>
     </section>
 
+  </div>
+
+  <!-- Crossfader in place of two channel faders: one thumb blends the decks,
+       like the PX5. Equal-power curve, centre = both decks at -3 dB. -->
+  <div class="xfader">
+    <div class="xf-label">1</div>
+    <div class="fader-track xf-track" id="xfTrack" aria-label="Crossfader">
+      <div class="xf-centre"></div>
+      <div class="fader-knob xf-knob" id="xfKnob"></div>
+    </div>
+    <div class="xf-label">2</div>
   </div>
 
   <div class="actions">

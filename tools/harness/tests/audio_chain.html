@@ -17,7 +17,9 @@ const post = o => fetch('/result', {method:'POST', body: JSON.stringify(o, null,
     for(let i=0;i<x.length;i++){const v=Math.abs(x[i]); if(v>pk)pk=v; sq+=x[i]*x[i]; if(v>=0.999)cl++;}
     return {peak:+pk.toFixed(3), rmsDb:+(20*Math.log10(Math.sqrt(sq/x.length))).toFixed(1),
             clippedPct:+(100*cl/x.length).toFixed(2)}; };
-  async function chain(busGain, limit) {
+  // Deck gain: the crossfader's centre, cos(pi/4) per deck (equal power). The
+  // old two-fader default of 0.85 is kept as the worst case it used to be.
+  async function chain(busGain, limit, deckGain = Math.SQRT1_2) {
     const oc = new OfflineAudioContext(1, N, sr);
     const mk = src => { const bb=oc.createBuffer(1,N,sr); bb.getChannelData(0).set(src); return bb; };
     const bus = oc.createGain(); bus.gain.value = busGain;
@@ -27,13 +29,14 @@ const post = o => fetch('/result', {method:'POST', body: JSON.stringify(o, null,
       bus.connect(l); tail=l; }
     tail.connect(oc.destination);
     for (const sig of [a,b]) { const s=oc.createBufferSource(); s.buffer=mk(sig);
-      const g=oc.createGain(); g.gain.value=0.85; s.connect(g); g.connect(bus); s.start(0); }
+      const g=oc.createGain(); g.gain.value=deckGain; s.connect(g); g.connect(bus); s.start(0); }
     return (await oc.startRendering()).getChannelData(0);
   }
   await post({
     trackA: stat(a), trackB: stat(b),
-    noHeadroom_theOldBug: stat(await chain(1.0, false)),
+    noHeadroom_theOldBug: stat(await chain(1.0, false, 0.85)),
     shippingChain_busHalfPlusLimiter: stat(await chain(0.5, true)),
+    shippingChain_oldDeckGain085: stat(await chain(0.5, true, 0.85)),
     verdict: 'shippingChain clippedPct must be 0.00',
   });
 })().catch(e => post({fatal: String(e && e.message || e)}));

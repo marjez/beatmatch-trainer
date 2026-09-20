@@ -20,10 +20,20 @@ let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
 // so Cue can return to the start point and Play can resume where it stopped.
 const decks = {
   A: { buffer: null, pool: null, validSeconds: 0, source: null, gain: null, panner: null, playing: false, ready: false,
-       fader: 0, nudge: 0, vol: 85, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
+       fader: 0, nudge: 0, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
   B: { buffer: null, pool: null, validSeconds: 0, source: null, gain: null, panner: null, playing: false, ready: false,
-       fader: 0, nudge: 0, vol: 85, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
+       fader: 0, nudge: 0, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
 };
+// Crossfader position, 0 = deck 1 only, 1 = deck 2 only. Equal-power curve:
+// centre puts both decks at -3 dB, the blend you actually beatmatch on.
+let xfade = 0.5;
+function deckGain(id) {
+  const x = Math.max(0, Math.min(1, xfade));
+  return id === 'A' ? Math.cos(x * Math.PI / 2) : Math.sin(x * Math.PI / 2);
+}
+function applyXfade() {
+  for (const id of DECKS) if (decks[id].gain) decks[id].gain.gain.value = deckGain(id);
+}
 const DECKS = ['A', 'B'];
 let sessionHistory = [];
 
@@ -453,7 +463,7 @@ function ensureChain(id) {
     }
     applySplit();
   }
-  d.gain.gain.value = d.vol / 100;
+  d.gain.gain.value = deckGain(id);
   return d;
 }
 function applySplit() {
@@ -736,16 +746,15 @@ function setPitchRange(range) {
 // Fader pixel sizes are measured once per layout change, not per pointermove:
 // reading clientHeight/offsetHeight mid-drag forces a synchronous layout on
 // every frame, which is most of what "lags terribly" was.
-const faderPx = { A: null, B: null };
+const faderPx = { A: null, B: null, xf: null };
 function measureFaders() {
   for (const id of DECKS) {
     faderPx[id] = {
       pitchH: $('faderTrack' + id).clientHeight,
       pitchKnob: $('faderKnob' + id).offsetHeight,
-      volH: $('volTrack' + id).clientHeight,
-      volKnob: $('volKnob' + id).offsetHeight,
     };
   }
+  faderPx.xf = { w: $('xfTrack').clientWidth, knob: $('xfKnob').offsetWidth };
 }
 
 function renderPitch(id) {
@@ -764,17 +773,15 @@ function renderPitch(id) {
   readout.classList.toggle('detent', atZero);
   $('zeroLed' + id).classList.toggle('lit', atZero);
 }
-function renderLevel(id) {
-  const d = decks[id];
-  if (!faderPx[id]) measureFaders();
-  const m = faderPx[id];
-  const h = m.volH - m.volKnob;
-  $('volKnob' + id).style.transform = `translate3d(0, ${((100 - d.vol) / 100) * h}px, 0)`;
-  $('volReadout' + id).textContent = String(Math.round(d.vol));
+function renderXfade() {
+  if (!faderPx.xf) measureFaders();
+  const m = faderPx.xf;
+  $('xfKnob').style.transform = `translate3d(${xfade * (m.w - m.knob)}px, 0, 0)`;
 }
 function renderAllFaders() {
   measureFaders();
-  for (const id of DECKS) { renderPitch(id); renderLevel(id); }
+  for (const id of DECKS) renderPitch(id);
+  renderXfade();
 }
 
 // One drag handler for every vertical fader.
@@ -854,23 +861,28 @@ function renderProfile() {
 // a thumb) and it tracks 1:1 from wherever you took hold; press the bare track
 // and nothing happens, exactly like the plinth of a 1210.
 const GRAB_SLOP = 28;          // px of extra hit area around the knob
-function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
-  let dragging = false, grabOffset = 0, virtualY = 0, lastY = 0, box = null, pendingFine = 1;
+// axis 'y' for the vertical pitch faders, 'x' for the crossfader. Fine-drag
+// only makes sense on a vertical fader (sideways distance scales it).
+function bindFader(track, knob, { get, set, fine = false, onFine = null, axis = 'y' }) {
+  let dragging = false, grabOffset = 0, virtual = 0, last = 0, box = null, pendingFine = 1;
+  const vertical = axis === 'y';
+  const along = e => vertical ? e.clientY : e.clientX;
+  const across = e => vertical ? e.clientX : e.clientY;
 
   track.addEventListener('pointerdown', e => {
     // Geometry read once per drag; reading per move forces a layout a frame.
     const rect = track.getBoundingClientRect();
-    const kh = knob.offsetHeight;
-    const usable = rect.height - kh;
-    const knobTop = get() * usable;
-    const y = e.clientY - rect.top;
-    if (y < knobTop - GRAB_SLOP || y > knobTop + kh + GRAB_SLOP) return;   // missed it
+    const kh = vertical ? knob.offsetHeight : knob.offsetWidth;
+    const usable = (vertical ? rect.height : rect.width) - kh;
+    const knobStart = get() * usable;
+    const p = along(e) - (vertical ? rect.top : rect.left);
+    if (p < knobStart - GRAB_SLOP || p > knobStart + kh + GRAB_SLOP) return;   // missed it
     dragging = true;
     try { track.setPointerCapture(e.pointerId); } catch {}
-    box = { usable, startX: e.clientX };
-    grabOffset = y - knobTop;      // keeps the knob where you took hold of it
-    virtualY = y;
-    lastY = e.clientY;
+    box = { usable, startAcross: across(e) };
+    grabOffset = p - knobStart;    // keeps the knob where you took hold of it
+    virtual = p;
+    last = along(e);
     pendingFine = 1;
     knob.classList.add('grabbed');
   });
@@ -878,14 +890,15 @@ function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
   track.addEventListener('pointermove', e => {
     if (!dragging || !box) return;
     const t0 = performance.now();
-    pendingFine = fine ? fineFactor(e.clientX - box.startX) : 1;
-    // At full sensitivity virtualY tracks the finger exactly, so the knob sits
-    // under it. Fine mode lets it lag deliberately — standard DAW behaviour.
-    virtualY += (e.clientY - lastY) * pendingFine;
-    lastY = e.clientY;
-    const knobTop = Math.max(0, Math.min(box.usable, virtualY - grabOffset));
-    virtualY = knobTop + grabOffset;                 // clamp without wind-up
-    set(box.usable ? knobTop / box.usable : 0);
+    pendingFine = fine ? fineFactor(across(e) - box.startAcross) : 1;
+    // At full sensitivity the virtual position tracks the finger exactly, so
+    // the knob sits under it. Fine mode lets it lag deliberately — standard
+    // DAW behaviour.
+    virtual += (along(e) - last) * pendingFine;
+    last = along(e);
+    const knobStart = Math.max(0, Math.min(box.usable, virtual - grabOffset));
+    virtual = knobStart + grabOffset;                // clamp without wind-up
+    set(box.usable ? knobStart / box.usable : 0);
     if (onFine) onFine(pendingFine);
     dragProfiler.sample(performance.now() - t0);
   });
@@ -902,7 +915,7 @@ function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
 }
 
 for (const id of DECKS) {
-  bindVFader($('faderTrack' + id), $('faderKnob' + id), {
+  bindFader($('faderTrack' + id), $('faderKnob' + id), {
     get: () => (decks[id].fader + pitchRange) / (pitchRange * 2),
     set: frac => {
       decks[id].fader = +(frac * pitchRange * 2 - pitchRange).toFixed(3);
@@ -912,15 +925,19 @@ for (const id of DECKS) {
     fine: true,
     onFine: f => $('pitchReadout' + id).classList.toggle('fine', f < 0.9),
   });
-  bindVFader($('volTrack' + id), $('volKnob' + id), {
-    get: () => 1 - decks[id].vol / 100,
-    set: frac => {
-      decks[id].vol = Math.round((1 - frac) * 100);
-      renderLevel(id);
-      if (decks[id].gain) decks[id].gain.gain.value = decks[id].vol / 100;
-    },
-  });
 }
+let xfadeSaveTimer = null;
+bindFader($('xfTrack'), $('xfKnob'), {
+  axis: 'x',
+  get: () => xfade,
+  set: frac => {
+    xfade = frac;
+    renderXfade();
+    applyXfade();
+    clearTimeout(xfadeSaveTimer);
+    xfadeSaveTimer = setTimeout(() => db.setSetting('xfade', xfade).catch(() => {}), 400);
+  },
+});
 
 // ---------- Nudge ----------
 // Momentary tempo bend, like a thumb on the platter. 1% was too weak to pull a
@@ -1119,7 +1136,7 @@ function registerSW() {
 // the app reads this.
 window.__bmt = {
   get ctx() { return ctx; }, get master() { return master; }, get round() { return round; },
-  get tracks() { return tracks; }, decks, rateFor, phraseStart,
+  get tracks() { return tracks; }, get xfade() { return xfade; }, decks, rateFor, phraseStart, deckGain,
 };
 
 // ---------- Init ----------
@@ -1129,6 +1146,7 @@ async function init() {
   try { setBeatFocus(await db.getSetting('beatFocus', false)); } catch {}
   try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
   catch { setPitchRange(BASE_RANGE); }
+  try { const x = await db.getSetting('xfade', 0.5); if (typeof x === 'number' && x >= 0 && x <= 1) xfade = x; } catch {}
   renderAllFaders();
   unlockAudioOnFirstTouch();
   window.addEventListener('resize', renderAllFaders);
@@ -1136,7 +1154,8 @@ async function init() {
   // until layout settles — and changes on rotate or when the URL bar hides.
   if (window.ResizeObserver) {
     const ro = new ResizeObserver(() => renderAllFaders());
-    for (const id of DECKS) { ro.observe($('faderTrack' + id)); ro.observe($('volTrack' + id)); }
+    for (const id of DECKS) ro.observe($('faderTrack' + id));
+    ro.observe($('xfTrack'));
   }
   try {
     tracks = await db.getAllTracks();

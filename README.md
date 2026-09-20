@@ -26,6 +26,9 @@ Beatmatch PRO built around your own crate.
   progressively finer (5× at ~120px out), enough to place it inside 0.01 BPM.
 - **±8%** under the fader is the SL-1210 range. Tap it for **±16%** when a pair
   needs more room; the hidden offset is unchanged, so it adds travel, not slack.
+- **Crossfader** under the decks blends them with an equal-power curve; centre
+  is both at −3 dB, which is where you beatmatch. The channel faders it replaced
+  were two more things to look after that a 1210 setup doesn't ask of you.
 - **Split L / R** pans deck A hard left and deck B hard right, so you can practise
   with one ear on the monitor the way you would cue on the mixer. Off by default;
   the choice persists between sessions.

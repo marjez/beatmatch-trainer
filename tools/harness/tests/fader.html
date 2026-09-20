@@ -31,8 +31,23 @@ setTimeout(async () => {
   R.knobStaysUnderFinger_px = +((knobY()+kh/2) - ((grab+120)-r.top)).toFixed(1);
   cost.sort((x,y)=>x-y);
   R.perMoveCostMs = {median:+cost[30].toFixed(2), max:+cost[59].toFixed(2)};
+  // Crossfader: same grab-the-knob model, horizontal. Equal-power curve.
+  const xt = g('xfTrack'), xk = g('xfKnob'), xr = xt.getBoundingClientRect(), xkw = xk.offsetWidth;
+  const xKnob = () => parseFloat((xk.style.transform.match(/\(\s*([-\d.]+)px/) || [0,0])[1]);
+  const xev = (ty,x,y) => xt.dispatchEvent(new w.PointerEvent(ty,{bubbles:true,pointerId:2,clientX:x,clientY:y}));
+  const xy = xr.top + xr.height/2, x0 = xKnob();
+  xev('pointerdown', xr.left + 2, xy); xev('pointermove', xr.left + 40, xy); xev('pointerup', xr.left + 40, xy);
+  await sleep(30);
+  R.xf_pressBareTrack_mustNotMove = +(xKnob() - x0).toFixed(1);
+  const gx = xr.left + xKnob() + xkw/2;
+  xev('pointerdown', gx, xy); for (let i=1;i<=40;i++) xev('pointermove', gx + i*2, xy); xev('pointerup', gx+80, xy);
+  await sleep(30);
+  R.xf_grab80px_knobShouldMove80 = +(xKnob() - x0).toFixed(1);
+  R.xf_position = +w.__bmt.xfade.toFixed(3);
+  R.xf_gains = { A: +w.__bmt.deckGain('A').toFixed(3), B: +w.__bmt.deckGain('B').toFixed(3),
+                 equalPower: +(w.__bmt.deckGain('A')**2 + w.__bmt.deckGain('B')**2).toFixed(4) };
   R.jsErrors = errs;
-  R.verdict = 'bare track 0, knob moves ~120, stays under finger ~0, cost well under 16ms';
+  R.verdict = 'bare track 0, knob moves ~120, stays under finger ~0, cost well under 16ms; xf moves 80, A²+B² == 1';
   await post(R);
  } catch(e) { await post({fatal:String(e && e.message || e)}); }
 }, 2500);
