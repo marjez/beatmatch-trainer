@@ -74,12 +74,30 @@ function ensureCtx() {
 // listening until the context reports 'running'. A first Play press while
 // still suspended schedules its source, which then starts on the release that
 // resumes the context; every later press starts on the press.
+//
+// And the iOS trap on top of that, hit on the phone with v19: a context created
+// at page load (so the graph is ready before the first press) can report
+// 'running' after resume() and still output NOTHING until a sound is started
+// from inside an activating gesture. v18 never saw it because its context was
+// born on the Play click. So the unlock also starts a one-frame silent buffer
+// on each activating event — the classic iOS unlock — and only stands down
+// once that has happened with the context running.
+function kickAudio(c) {
+  try {
+    const b = c.createBuffer(1, 1, c.sampleRate);
+    const s = c.createBufferSource();
+    s.buffer = b; s.connect(c.destination); s.start(0);
+  } catch {}
+}
 function unlockAudioOnFirstTouch() {
   const EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
-  const unlock = () => {
+  const ACTIVATING = new Set(['pointerup', 'touchend', 'click', 'keydown']);
+  let kicked = false;
+  const unlock = e => {
     ensureMaster();
     for (const id of DECKS) ensureChain(id);
-    if (ctx && ctx.state === 'running') for (const ev of EVENTS) document.removeEventListener(ev, unlock, true);
+    if (ctx && ACTIVATING.has(e.type)) { kickAudio(ctx); kicked = true; }
+    if (ctx && ctx.state === 'running' && kicked) for (const ev of EVENTS) document.removeEventListener(ev, unlock, true);
   };
   for (const ev of EVENTS) document.addEventListener(ev, unlock, true);
   // A phone call, Siri or a trip to the switcher leaves the context suspended
