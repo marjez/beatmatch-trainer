@@ -80,11 +80,11 @@ obvious alternatives were tried on real tracks and both failed:
   to zero, and seeking to the phrase start was only frame-accurate.
 
 What works, and why each part is load-bearing:
-- AudioContext at CTX_RATE (32 kHz). decodeAudioData resamples AS it decodes,
-  so this bounds the transient, not just what we keep: 216 MB -> 144 MB.
+- AudioContext runs at the DEVICE'S NATIVE RATE (see the section above — forcing
+  32 kHz risked iOS crackle and cost transient detail).
 - Immediately copy a WINDOW_S (180 s) MONO window out of the decoded buffer and
-  drop the full one: 23 MB per deck, 46 MB for both. Mono is free — the split
-  panner puts each deck hard L/R anyway.
+  drop the full one: ~34.6 MB per deck at 48 kHz, ~69 MB for both. Mono is free —
+  the split panner puts each deck hard L/R anyway.
 - The window STARTS at phraseStart(), so buffer offset 0 IS the downbeat. That
   is what makes playback start on beat 1 rather than near it, and it makes the
   cue point exactly 0.
@@ -115,7 +115,8 @@ What works, and why each part is load-bearing:
   every deploy that changes shell files, or users get stale code.
 - Design tokens live in css/app.css :root — palette named after turntable parts
   (plinth, platter, alloy, strobe, lock, amber). Reuse them; don't invent colors.
-- Fonts: Chakra Petch (display), IBM Plex Mono (data), IBM Plex Sans (body).
+- Fonts: Chakra Petch (display), IBM Plex Mono (data), system stack for body.
+  IBM Plex Sans was dropped — 194 KB to style one rule. Don't add a third family.
 
 ## Key mechanics (don't break these)
 - Both decks are live. Deck 1 rate = 1 + (fader+nudge)/100. Deck 2 rate =
