@@ -84,7 +84,9 @@ js/db.js              IndexedDB: tracks (audio blobs + metadata), round stats, s
 js/vendor/            web-audio-beat-detector, vendored as a self-contained ESM bundle
 sw.js                 service worker: offline shell + font caching
 manifest.webmanifest  PWA install metadata
-tools/rekordbox_export.py   crate export from Rekordbox XML
+tools/rekordbox_export.py   crate export from Rekordbox XML (+ crate.json beat grid)
+tools/crate_sync.py         fold newly dropped tracks into an existing crate
+tools/crate_bpm_stats.py    print a playlist's BPM spread (numbers only)
 ```
 
 No build step, no dependencies, no framework. Vanilla ES modules.

@@ -159,6 +159,30 @@ What works, and why each part is load-bearing:
   off by default, persisted in the settings store.
 - BPM detection uses vendored web-audio-beat-detector.
 
+## Open threads (as of 2026-09-20)
+- UNVERIFIED: v15's phase-locked "Drop both" + Beat focus are the fix for "hard
+  to hear the match", but the owner hasn't tried them on the phone yet. Don't
+  build on top of that mechanic until it's confirmed working.
+- 6 of 41 crate tracks have no beat grid, so they still start off-phrase and gain
+  nothing from the phase lock: 02 Blaze - Most Precious Love 1, michael_moog -
+  that_sound, CHRIS STASSY x2, EserEx - Oversimplify, G-TONIN - After All. They
+  postdate the Aug 2 rekordbox.xml — re-export it and re-run tools/crate_sync.py.
+- "02 Blaze - Most Precious Love 1" fuzzy-matches the Freemasons Club Mix at 0.50,
+  which is a DIFFERENT mix. crate_sync deliberately leaves it unmatched rather
+  than stamp it with the wrong BPM and downbeat.
+- Two duplicate recordings sit in the crate under both old and new names (Michael
+  Bibi - Lil Freaky, Dennis Cruz - El Sueño). Harmless but they can be dealt
+  against each other; the owner should delete one copy of each.
+- "Prodigy - breathe 130.02bpm.mp3" vanished from the crate folder between Aug 2
+  and Sept 20. crate_sync provably didn't remove it (it only renames untagged
+  files and only deletes a lossless original after converting it).
+- Next feature if the mechanic checks out: the stats page (roadmap 5). Rounds
+  already persist err/errBpm/difficulty/pitchRange/faderA/faderB and nothing
+  reads them back except a count, so there's no way to see improvement.
+- NOT worth building yet: beat-phase scoring (roadmap 3). With a phase-locked
+  start, drift at reveal is just tempo error x elapsed time — it would mostly
+  restate the score already shown.
+
 ## Roadmap (owner-approved directions, build when asked)
 3. Beat-phase scoring: score not just tempo but beat alignment (onset offset at reveal).
 4. Daily challenge: seeded pair-of-the-day from own crate (date-seeded PRNG), streak counter.
