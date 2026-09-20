@@ -41,6 +41,8 @@ JS
   "$JSC" "$tmp/c.js" || status=1
 fi
 
+python3 tools/harness/shell_check.py || status=1
+
 for f in tools/*.py tools/harness/*.py; do
   python3 -m py_compile "$f" 2>"$tmp/err" && echo "OK   $f" || { echo "FAIL $f"; cat "$tmp/err"; status=1; }
 done

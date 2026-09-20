@@ -1,0 +1,133 @@
+<!doctype html><meta charset=utf-8><title>rounds</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Whole rounds through the real UI: pairing stays inside the fader range, the
+// hidden offset stays inside the difficulty band and reachable, faders are set
+// by dragging the knob, Reveal shows the score the maths says it should, and
+// the round lands in IndexedDB with every field the stats page needs.
+import { post, sleep, bootApp, loadCrate, waitReady, pev, tap, waitFor } from './lib.js';
+const R = { rounds: [], failures: [] };
+const fail = (m, extra) => R.failures.push(extra ? `${m} ${JSON.stringify(extra)}` : m);
+try {
+  const app = await bootApp();
+  await loadCrate(app);
+  await waitReady(app);
+  const { w, g, bmt } = app;
+  const track = id => bmt.tracks.find(t => t.id === id);
+
+  // Drag a pitch fader to a target percentage by grabbing its knob.
+  async function dragTo(id, pct) {
+    const trackEl = g('faderTrack' + id), knob = g('faderKnob' + id);
+    const r = trackEl.getBoundingClientRect(), kh = knob.offsetHeight, usable = r.height - kh;
+    const range = +g('rangeBtn').textContent.replace(/[^\d]/g, '');
+    const cur = bmt.decks[id].fader;
+    const frac = v => (v + range) / (range * 2);
+    const y0 = r.top + frac(cur) * usable + kh / 2, cx = r.left + r.width / 2;
+    const y1 = r.top + frac(pct) * usable + kh / 2;
+    pev(w, trackEl, 'pointerdown', { clientX: cx, clientY: y0 });
+    const steps = 12;
+    for (let i = 1; i <= steps; i++) { pev(w, trackEl, 'pointermove', { clientX: cx, clientY: y0 + (y1 - y0) * i / steps }); await sleep(4); }
+    pev(w, trackEl, 'pointerup', { clientX: cx, clientY: y1 });
+  }
+  const readRounds = () => new Promise((res, rej) => {
+    const q = w.indexedDB.open('beatmatch-trainer');
+    q.onsuccess = () => { const db = q.result; const rq = db.transaction('rounds').objectStore('rounds').getAll(); rq.onsuccess = () => { db.close(); res(rq.result); }; rq.onerror = () => rej(rq.error); };
+    q.onerror = () => rej(q.error);
+  });
+  const before = (await readRounds()).length;
+
+  async function playRound(i, { difficulty, wide, targetErrPct }) {
+    // Settings live in the sheet; set them through the real buttons.
+    const diffBtn = [...g('diffSeg').children].find(b => b.dataset.diff === difficulty);
+    diffBtn.click();
+    const isWide = g('rangeBtn').classList.contains('wide');
+    if (isWide !== wide) g('rangeBtn').click();
+    await sleep(30);
+    g('newPairBtn').click();
+    await waitReady(app);
+    const round = bmt.round, a = track(round.aId), b = track(round.bId);
+    const range = wide ? 16 : 8;
+    const rec = { i, difficulty, range, a: a.name, b: b.name, hidden: +round.hidden.toFixed(3), r0: +round.r0.toFixed(5) };
+    if (a.id === b.id) fail('same track dealt', rec);
+    if (Math.abs(round.r0 - 1) * 100 > range + 1e-9) fail('pair outside fader range', rec);
+    const [lo, hi] = difficulty === 'easy' ? [2, 6] : [0.5, 2.5];
+    const mag = Math.abs(round.hidden);
+    if (mag < lo - 1e-9 || mag > hi + 1e-9) fail('hidden outside band', rec);
+    const needed = (1 / (1 + round.hidden / 100) - 1) * 100;
+    if (Math.abs(needed) > range - 0.5 + 1e-9) fail('correct position not reachable', rec);
+    if (bmt.decks.A.fader !== 0 || bmt.decks.B.fader !== 0) fail('faders not reset', rec);
+
+    // Put deck A somewhere, then deck B where it cancels the hidden offset plus a
+    // deliberate error of targetErrPct, and check the reveal reports that error.
+    const faderA = +(Math.random() * 4 - 2).toFixed(2);
+    await dragTo('A', faderA);
+    const wantB = ((1 + bmt.decks.A.fader / 100) * (1 + targetErrPct / 100) / (1 + round.hidden / 100) - 1) * 100;
+    await dragTo('B', Math.max(-range, Math.min(range, wantB)));
+    await sleep(30);
+    const fa = bmt.decks.A.fader, fb = bmt.decks.B.fader;
+    const errPct = ((1 + round.hidden / 100) * (1 + fb / 100) / (1 + fa / 100) - 1) * 100;
+    const errBpm = a.bpm * (1 + fa / 100) * errPct / 100;
+    // Rates the decks are actually running at must agree with the faders.
+    const rateA = bmt.rateFor('A'), rateB = bmt.rateFor('B');
+    if (Math.abs(rateA - (1 + fa / 100)) > 1e-9) fail('rate A', { rateA, fa });
+    if (Math.abs(rateB - round.r0 * (1 + round.hidden / 100) * (1 + fb / 100)) > 1e-9) fail('rate B', { rateB });
+    // Also, deck B at zero error must run at bpmA*(1+fa) exactly.
+    const bpmBEff = b.bpm * rateB, bpmAEff = a.bpm * rateA;
+    if (Math.abs((bpmBEff / bpmAEff - 1) * 100 - errPct) > 1e-6) fail('effective BPM relation', { bpmAEff, bpmBEff, errPct });
+
+    g('revealBtn').click();
+    await waitFor(() => g('overlay').classList.contains('show'), 3000, 'reveal');
+    const shown = g('revealScore').textContent, sub = g('revealSub').textContent;
+    const cls = g('revealScore').className;
+    Object.assign(rec, { faderA: fa, faderB: fb, errPct: +errPct.toFixed(4), errBpm: +errBpm.toFixed(4), shown, sub, cls });
+    if (sub !== 'BPM off') fail('reveal not in BPM', rec);
+    if (shown !== Math.abs(errBpm).toFixed(2)) fail('reveal score mismatch', rec);
+    const band = Math.abs(errBpm) <= 0.05 ? 'good' : Math.abs(errBpm) <= 0.3 ? 'mid' : 'bad';
+    if (!cls.includes(band)) fail('reveal colour band', rec);
+    if (bmt.decks.A.playing || bmt.decks.B.playing) fail('decks still playing after reveal', rec);
+    await sleep(50);
+    const rows = await readRounds();
+    const last = rows[rows.length - 1];
+    if (rows.length !== before + i + 1) fail('round not persisted', { rows: rows.length });
+    for (const k of ['err', 'errBpm', 'difficulty', 'pitchRange', 'faderA', 'faderB', 'aName', 'bName', 'at']) {
+      if (last[k] === undefined || last[k] === null) fail('persisted round missing ' + k, last);
+    }
+    if (last && Math.abs(last.err - errPct) > 1e-9) fail('persisted err differs', { saved: last.err, errPct });
+    if (last && last.difficulty !== difficulty) fail('persisted difficulty', last);
+    if (last && last.pitchRange !== range) fail('persisted range', last);
+    if (last && (last.faderA !== fa || last.faderB !== fb)) fail('persisted faders', last);
+    R.rounds.push(rec);
+    // Retry keeps the pair; Next deals a new one.
+    g('retryBtn').click();
+    await waitReady(app);
+    if (bmt.round.aId !== round.aId || bmt.round.bId !== round.bId) fail('retry changed the pair');
+    if (bmt.round.hidden === round.hidden) fail('retry reused the hidden offset');
+  }
+
+  const plan = [
+    { difficulty: 'easy', wide: false, targetErrPct: 0 },
+    { difficulty: 'easy', wide: false, targetErrPct: 0.5 },
+    { difficulty: 'hard', wide: false, targetErrPct: -0.1 },
+    { difficulty: 'hard', wide: false, targetErrPct: 0.03 },
+    { difficulty: 'easy', wide: true, targetErrPct: 1.2 },
+    { difficulty: 'hard', wide: true, targetErrPct: 0 },
+  ];
+  for (let i = 0; i < plan.length; i++) await playRound(i, plan[i]);
+
+  // Pairing exhaustively: every dealt pair over many deals is mixable at ±8.
+  g('rangeBtn').click(); await sleep(20);
+  if (g('rangeBtn').classList.contains('wide')) g('rangeBtn').click();
+  const seen = new Set();
+  for (let i = 0; i < 30; i++) {
+    g('newPairBtn').click(); await waitFor(() => bmt.round, 2000, 'round');
+    const r = bmt.round; seen.add(r.aId + '-' + r.bId);
+    if (Math.abs(r.r0 - 1) * 100 > 8) fail('±8 deal outside range', r);
+  }
+  R.distinctPairsIn30Deals = seen.size;
+  await waitReady(app);
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>
