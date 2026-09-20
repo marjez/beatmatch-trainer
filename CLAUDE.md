@@ -205,6 +205,19 @@ What works, and why each part is load-bearing:
 7. Crate manager: tag tracks, filter pairs by tag (mirrors Rekordbox playlists).
 8. Export/import crate metadata as JSON (not audio) for device migration.
 
+## Working from the Linux box as well as the Mac
+- tools/harness/ is the measurement kit that found every real bug here. Run
+  tools/harness/check.sh to parse-check (node on Linux, JavaScriptCore on the
+  Mac) and tools/harness/browser_test.py to drive the real app in headless
+  Chrome. make_test_audio.py synthesises tracks with a known BPM and a downbeat
+  at t=0, so no test depends on the owner's crate.
+- MAC-ONLY, and can't move: the crate itself lives in iCloud Drive and
+  rekordbox.xml is exported there, so crate_sync.py / rekordbox_export.py only
+  make sense on the Mac. They also shell out to afconvert, which is macOS-only —
+  if that ever needs to run on Linux it wants an ffmpeg branch.
+- Harness numbers are not phone numbers. A desktop browser is not the input
+  pipeline iOS uses; the in-app Touch diagnostics panel is the ground truth.
+
 ## Testing checklist before deploy
 - iPhone Safari: fader drag, nudge hold, audio plays after first tap (autoplay policy).
 - Kill network → app still loads and plays stored tracks.
