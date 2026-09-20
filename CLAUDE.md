@@ -100,6 +100,13 @@ What works, and why each part is load-bearing:
   coalescing — that was a workaround for the media element and only adds lag.
 - Decodes are sequenced through loadChain so two full-size buffers never coexist,
   and a per-deck token discards results from a superseded round.
+- Window buffers are POOLED (windowPool) — allocated once per deck and overwritten
+  in place, with d.validSeconds tracking the usable part and src.start(when, at,
+  duration) avoiding the zeroed tail. Allocating a fresh ~35 MB Float32Array per
+  deck per round, on top of dropping the ~150 MB decoded original, is the churn
+  that makes the collector pause the main thread — and on-device profiling showed
+  those pauses landing as 40-135 ms freezes mid-drag while touch delivery and fps
+  were otherwise healthy (59 Hz, 60 fps, 17 ms median gap).
 - decodeForAnalysis() still full-decodes for BPM detection of untagged tracks.
   Nothing caches it — one held full buffer can kill the tab.
 - Fader pixel sizes are measured into faderPx on layout change, never per move.

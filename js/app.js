@@ -19,9 +19,9 @@ let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
 // the score is the tempo difference BETWEEN them. offset/mark track the playhead
 // so Cue can return to the start point and Play can resume where it stopped.
 const decks = {
-  A: { buffer: null, source: null, gain: null, panner: null, playing: false, ready: false,
+  A: { buffer: null, pool: null, validSeconds: 0, source: null, gain: null, panner: null, playing: false, ready: false,
        fader: 0, nudge: 0, vol: 85, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
-  B: { buffer: null, source: null, gain: null, panner: null, playing: false, ready: false,
+  B: { buffer: null, pool: null, validSeconds: 0, source: null, gain: null, panner: null, playing: false, ready: false,
        fader: 0, nudge: 0, vol: 85, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
 };
 const DECKS = ['A', 'B'];
@@ -464,13 +464,19 @@ function loadDeck(id, track) {
       const full = await ctx.decodeAudioData(await track.blob.arrayBuffer());
       if (d.token !== token) return;
       const start = Math.floor(phraseStart(track, full.duration) * c.sampleRate);
-      const len = Math.max(1, Math.min(Math.floor(WINDOW_S * c.sampleRate), full.length - start));
-      const win = c.createBuffer(1, len, c.sampleRate);
+      // Reuse a pooled buffer. Allocating a fresh ~35 MB Float32Array per deck
+      // per round, then dropping it along with the ~150 MB decoded original, is
+      // exactly the churn that makes the collector pause the main thread — and a
+      // GC pause lands as a 40-135 ms freeze mid-drag. The pool is allocated once.
+      const win = windowPool(id, c);
       const out = win.getChannelData(0);
       const L = full.getChannelData(0);
       const R = full.numberOfChannels > 1 ? full.getChannelData(1) : L;
-      for (let i = 0; i < len; i++) out[i] = (L[start + i] + R[start + i]) * 0.5;
+      const avail = Math.max(1, Math.min(win.length, full.length - start));
+      for (let i = 0; i < avail; i++) out[i] = (L[start + i] + R[start + i]) * 0.5;
+      if (avail < win.length) out.fill(0, avail);       // silence the unused tail
       d.buffer = win;                                   // full buffer drops here
+      d.validSeconds = avail / c.sampleRate;
       d.ready = true;
       updateTransport();
     } catch {
@@ -480,6 +486,17 @@ function loadDeck(id, track) {
     }
   });
   return loadChain;
+}
+
+// One window buffer per deck, allocated once and overwritten in place. Sources
+// are always stopped before a reload, so nothing is reading it as we rewrite.
+function windowPool(id, c) {
+  const d = decks[id];
+  const len = Math.floor(WINDOW_S * c.sampleRate);
+  if (!d.pool || d.pool.length !== len || d.pool.sampleRate !== c.sampleRate) {
+    d.pool = c.createBuffer(1, len, c.sampleRate);
+  }
+  return d.pool;
 }
 
 // Position is tracked against the audio clock. Always mark BEFORE changing rate
@@ -510,9 +527,10 @@ function startSource(id, from, when) {
   src.connect(d.gain);
   d.rate = rateFor(id);
   src.playbackRate.value = d.rate;
-  const at = Math.max(0, Math.min(from, d.buffer.duration - 0.05));
+  const valid = d.validSeconds || d.buffer.duration;
+  const at = Math.max(0, Math.min(from, valid - 0.05));
   const startAt = when || 0;
-  src.start(startAt, at);
+  src.start(startAt, at, Math.max(0.05, valid - at));   // don't play the zeroed tail
   d.source = src;
   d.offset = at;
   d.mark = Math.max(startAt, c.currentTime);
@@ -723,10 +741,11 @@ function fineFactor(dx) { return 1 / (1 + Math.abs(dx) / FINE_FALLOFF); }
 // input pipeline a phone uses. This records what actually happens during a real
 // drag on the real device so the next fix is aimed at measured behaviour.
 const dragProfiler = {
-  times: [], frames: 0, rafId: null, last: null,
-  sample() {
+  times: [], self: [], frames: 0, rafId: null, last: null,
+  sample(selfMs) {
     const t = performance.now();
     if (this.last !== null) this.times.push(t - this.last);
+    if (selfMs !== undefined) this.self.push(selfMs);
     this.last = t;
     if (this.rafId === null) {
       this.frames = 0;
@@ -736,8 +755,8 @@ const dragProfiler = {
   },
   finish() {
     if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
-    const g = this.times.slice();
-    this.times = []; this.last = null;
+    const g = this.times.slice(), sf = this.self.slice();
+    this.times = []; this.self = []; this.last = null;
     if (g.length < 5) return;
     const sorted = [...g].sort((a, b) => a - b);
     const med = sorted[Math.floor(sorted.length / 2)];
@@ -750,6 +769,7 @@ const dragProfiler = {
       worstGapMs: +worst.toFixed(1),
       stalls: g.filter(x => x > 40).length,
       fps: span > 0 ? Math.round(this.frames / (span / 1000)) : 0,
+      handlerMaxMs: sf.length ? +Math.max(...sf).toFixed(2) : null,
     };
     renderProfile();
   },
@@ -762,6 +782,7 @@ function renderProfile() {
   el.textContent = r
     ? `${r.moves} moves · ${r.hz ? r.hz + ' Hz' : '—'} touch · ${r.fps} fps · `
       + `median gap ${r.medianGapMs} ms · worst ${r.worstGapMs} ms · ${r.stalls} stalls >40 ms`
+      + (r.handlerMaxMs !== null ? ` · our handler max ${r.handlerMaxMs} ms` : '')
     : 'Drag a pitch fader, then reopen this menu.';
 }
 
@@ -800,7 +821,7 @@ function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
 
   track.addEventListener('pointermove', e => {
     if (!dragging || !box) return;
-    dragProfiler.sample();
+    const t0 = performance.now();
     pendingFine = fine ? fineFactor(e.clientX - box.startX) : 1;
     // At full sensitivity virtualY tracks the finger exactly, so the knob sits
     // under it. Fine mode lets it lag deliberately — standard DAW behaviour.
@@ -810,6 +831,7 @@ function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
     virtualY = knobTop + grabOffset;                 // clamp without wind-up
     set(box.usable ? knobTop / box.usable : 0);
     if (onFine) onFine(pendingFine);
+    dragProfiler.sample(performance.now() - t0);
   });
 
   const end = () => {
@@ -1005,7 +1027,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v17';
+const APP_BUILD = 'bmt-v18';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
