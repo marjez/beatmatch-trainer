@@ -1,0 +1,123 @@
+<!doctype html><meta charset=utf-8><title>ride</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Riding the pitch while playing: 150 fader moves over 2 s must not open a
+// single gap in the output (the drone under the beat makes gaps measurable),
+// the beat period must follow the fader, nudge must bend by exactly 2% and
+// snap back, stop/play must resume where it stopped, and ten rounds must
+// reuse the same pooled window buffers rather than allocate.
+import { post, sleep, bootApp, loadCrate, waitReady, tapMaster, pev, waitFor, stats } from './lib.js';
+const R = { failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+try {
+  const app = await bootApp(); await loadCrate(app); await waitReady(app);
+  const { w, g, bmt } = app; const ctx = bmt.ctx;
+  pev(w, g('playA'), 'pointerdown'); await sleep(50); pev(w, g('playA'), 'pointerup'); await sleep(100);
+  pev(w, g('playA'), 'pointerdown'); await sleep(50); pev(w, g('playA'), 'pointerup'); await sleep(100);
+  const rec = await tapMaster(app);
+  const track = id => bmt.tracks.find(t => t.id === (id === 'A' ? bmt.round.aId : bmt.round.bId));
+
+  // ---- Steady baseline: the material itself has quiet moments (the kick's
+  // decaying tail cancels the drone ~140 ms after each hit for ~11 ms), so the
+  // dropout criterion is "no longer than steady playback shows", not a fixed
+  // number.
+  bmt.decks.A.offset = 0;
+  pev(w, g('playA'), 'pointerdown'); await sleep(40); pev(w, g('playA'), 'pointerup');
+  await sleep(400);
+  const tB0 = ctx.currentTime; await sleep(2500); const tB1 = ctx.currentTime; await rec.settle(tB1);
+  const steady = rec.scanRuns(tB0, tB1, 0.006);
+  R.steady = { longestQuietRunMs: steady.longestMs, samples: steady.n };
+
+  // ---- Ride ----
+  const trackEl = g('faderTrackA'), knob = g('faderKnobA');
+  const r = trackEl.getBoundingClientRect(), kh = knob.offsetHeight, cx = r.left + r.width / 2;
+  const knobY = () => parseFloat((knob.style.transform.match(/,\s*([-\d.]+)px/) || [0, 0])[1]);
+  const grab = r.top + knobY() + kh / 2;
+  const tRide0 = ctx.currentTime;
+  pev(w, trackEl, 'pointerdown', { clientX: cx, clientY: grab });
+  const fadersSeen = [];
+  for (let i = 1; i <= 150; i++) {
+    // down 100 px then back up: faster then back toward zero
+    const y = grab + (i <= 75 ? i * 1.4 : (150 - i) * 1.4);
+    pev(w, trackEl, 'pointermove', { clientX: cx, clientY: y });
+    fadersSeen.push(bmt.decks.A.fader);
+    await sleep(13);
+  }
+  pev(w, trackEl, 'pointerup', { clientX: cx, clientY: grab });
+  const tRide1 = ctx.currentTime;
+  await sleep(300); await rec.settle(tRide1 + 0.2);
+  // Gap scan over the ride window: longest run below threshold.
+  const scan = rec.scanRuns(tRide0, tRide1, 0.006);
+  R.ride = { moves: 150, faderMax: +Math.max(...fadersSeen).toFixed(3), faderEnd: bmt.decks.A.fader,
+             longestQuietRunMs: scan.longestMs, samples: scan.n, rateNow: +bmt.rateFor('A').toFixed(5) };
+  if (scan.longestMs > steady.longestMs * 1.5 + 1) fail('gap in output while riding the fader', { ride: scan, steady });
+  if (R.ride.faderMax < 2) fail('fader did not move during ride', R.ride);
+  // Beat period after the ride must match the final rate.
+  await sleep(3200); await rec.settle(tRide1 + 3.2);
+  const ons2 = rec.onsets(tRide1 + 0.05, tRide1 + 3.1);
+  const per = ons2.slice(1).map((t, i) => (t - ons2[i]) * 1000);
+  const expect = 60 / track('A').bpm / bmt.rateFor('A') * 1000;
+  R.ride.beatPeriodAfterMs = stats(per); R.ride.expectedPeriodMs = +expect.toFixed(2);
+  if (per.length && Math.abs(stats(per).median - expect) > 0.5) fail('beat period does not follow the fader', R.ride);
+
+  // ---- Nudge ----
+  const rateBefore = bmt.rateFor('A');
+  pev(w, g('nudgeUpA'), 'pointerdown');
+  const rateHeld = bmt.rateFor('A');
+  await sleep(1500);
+  const tN0 = ctx.currentTime - 1.2, tN1 = ctx.currentTime;
+  pev(w, g('nudgeUpA'), 'pointerup');
+  const rateAfter = bmt.rateFor('A');
+  await sleep(200); await rec.settle(tN1);
+  const onsN = rec.onsets(tN0, tN1);
+  const perN = onsN.slice(1).map((t, i) => (t - onsN[i]) * 1000);
+  const expectN = 60 / track('A').bpm / rateHeld * 1000;
+  R.nudge = { rateBefore: +rateBefore.toFixed(5), rateHeld: +rateHeld.toFixed(5), rateAfter: +rateAfter.toFixed(5),
+              periodHeldMs: stats(perN), expectedHeldMs: +expectN.toFixed(2), readoutHeld: null };
+  if (Math.abs(rateHeld / rateBefore - 1.02) > 1e-9) fail('nudge is not +2%', R.nudge);
+  if (rateAfter !== rateBefore) fail('nudge did not snap back', R.nudge);
+  if (perN.length && Math.abs(stats(perN).median - expectN) > 0.5) fail('beat period under nudge', R.nudge);
+
+  // ---- Stop / resume position ----
+  const d = bmt.decks.A;
+  const tS0 = ctx.currentTime;
+  pev(w, g('playA'), 'pointerdown'); await sleep(40); pev(w, g('playA'), 'pointerup');   // stop
+  const stoppedAt = d.offset, elapsedAudio = (ctx.currentTime - tS0);
+  await sleep(300);
+  const before = d.offset;
+  pev(w, g('playA'), 'pointerdown'); await sleep(40); pev(w, g('playA'), 'pointerup');   // resume
+  const resumedFrom = d.offset;
+  R.resume = { offsetAtStop: +stoppedAt.toFixed(4), offsetBeforePlay: +before.toFixed(4), resumedFrom: +resumedFrom.toFixed(4), playing: d.playing };
+  if (Math.abs(resumedFrom - stoppedAt) > 0.003) fail('did not resume where it stopped', R.resume);
+  if (stoppedAt < 3) fail('offset did not advance while playing', R.resume);
+  // And the beats after resume are still on the grid: the offset is a whole
+  // number of beats plus the phase we stopped at, so the next onset after the
+  // resume must land within one quantum of where the grid predicts.
+  const tR = d.mark; await sleep(1200); await rec.settle(tR + 1.1);
+  const onsR = rec.onsets(tR, tR + 1.1);
+  const beat = 60 / track('A').bpm;                       // in buffer seconds
+  const rate = bmt.rateFor('A');
+  const phase = resumedFrom % beat;                        // buffer seconds into the current beat
+  const predictedFirst = tR + ((beat - phase) % beat) / rate; // audio time of next kick
+  const firstErr = onsR.length ? Math.min(...onsR.map(t => Math.abs(t - predictedFirst))) * 1000 : null;
+  R.resume.nextKickVsGridMs = firstErr !== null ? +firstErr.toFixed(2) : null;
+  if (firstErr === null || firstErr > 8) fail('beats after resume are off the grid', R.resume);
+
+  // ---- Ten rounds: pool identity, no leaks ----
+  pev(w, g('playA'), 'pointerdown'); await sleep(40); pev(w, g('playA'), 'pointerup');
+  const poolA = bmt.decks.A.pool, poolB = bmt.decks.B.pool;
+  const mem0 = w.performance.memory ? w.performance.memory.usedJSHeapSize : null;
+  for (let i = 0; i < 10; i++) { g('newPairBtn').click(); await waitReady(app); }
+  const mem1 = w.performance.memory ? w.performance.memory.usedJSHeapSize : null;
+  R.rounds10 = { poolAReused: bmt.decks.A.pool === poolA, poolBReused: bmt.decks.B.pool === poolB,
+                 heapBeforeMB: mem0 && +(mem0 / 1e6).toFixed(1), heapAfterMB: mem1 && +(mem1 / 1e6).toFixed(1),
+                 validSecondsA: +bmt.decks.A.validSeconds.toFixed(2), validSecondsB: +bmt.decks.B.validSeconds.toFixed(2) };
+  if (!R.rounds10.poolAReused || !R.rounds10.poolBReused) fail('window pool reallocated', R.rounds10);
+
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  rec.disconnect();
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>

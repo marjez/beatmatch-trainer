@@ -11,19 +11,22 @@ export async function get(url) {
 }
 
 export async function bootApp(frameId = 'f') {
-  const w = document.getElementById(frameId).contentWindow;
+  const frame = document.getElementById(frameId);
+  // The app reloads itself once when the service worker first takes control
+  // (controllerchange -> location.reload), which would leave us holding a dead
+  // window. Wait until the page is controlled, which is the steady state a
+  // user is in on every launch after the first, then bind to THAT window.
+  let w = null;
+  for (let i = 0; i < 400; i++) {
+    const cw = frame.contentWindow;
+    if (cw && cw.__bmt && (!cw.navigator.serviceWorker || cw.navigator.serviceWorker.controller)) { w = cw; break; }
+    await sleep(50);
+  }
+  if (!w) throw new Error('app did not boot under service worker control');
+  await sleep(300);
   const errs = [];
   w.addEventListener('error', e => errs.push(String(e.message)));
   w.addEventListener('unhandledrejection', e => errs.push('rejection: ' + String(e.reason)));
-  for (let i = 0; i < 200 && !w.__bmt; i++) await sleep(50);
-  if (!w.__bmt) throw new Error('app did not expose __bmt');
-  // Let the service worker finish installing and claiming before any test
-  // traffic: a claim landing mid-fetch aborts the in-flight body, and the
-  // steady state is what a user gets on every launch after the first.
-  if (w.navigator.serviceWorker) {
-    await Promise.race([w.navigator.serviceWorker.ready, sleep(5000)]);
-    await sleep(300);
-  }
   return { w, d: w.document, g: id => w.document.getElementById(id), errs, bmt: w.__bmt };
 }
 
@@ -98,6 +101,16 @@ export async function tapMaster(app) {
       let last = null;
       for (const [t, v] of samples(t0, t1)) if (Math.abs(v) > thr) last = t;
       return last;
+    },
+    // Longest run of consecutive samples below thr inside [t0, t1): a dropout
+    // shows up as a run far longer than the half-cycle of the drone.
+    scanRuns(t0, t1, thr = 0.006) {
+      let run = 0, longest = 0, n = 0, at = null;
+      for (const [t, v] of samples(t0, t1)) {
+        n++;
+        if (Math.abs(v) < thr) { run++; if (run > longest) { longest = run; at = t; } } else run = 0;
+      }
+      return { longestMs: +(longest / sr * 1000).toFixed(2), n, endsAt: at };
     },
     peak(t0, t1) { let p = 0; for (const [, v] of samples(t0, t1)) p = Math.max(p, Math.abs(v)); return p; },
     // Kick onsets: positive-going threshold crossings on a 4 ms envelope with
