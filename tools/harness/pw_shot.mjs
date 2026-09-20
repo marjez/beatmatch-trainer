@@ -32,9 +32,34 @@ try {
     const input = document.getElementById('fileInput'); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true }));
   }, { picked: files.slice(0, 4) });
   await page.waitForFunction(() => window.__bmt.round && window.__bmt.decks.A.ready && window.__bmt.decks.B.ready, null, { timeout: 30000 });
+  // Seed forty rounds over six weeks so the Progress panel has something to show.
+  await page.evaluate(() => new Promise(res => {
+    const q = indexedDB.open('beatmatch-trainer');
+    q.onsuccess = () => {
+      const db = q.result, tx = db.transaction('rounds', 'readwrite'), st = tx.objectStore('rounds');
+      let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < 40; i++) {
+        const hard = rnd() < 0.5, spread = hard ? 0.35 : 0.9;
+        const skill = 1 - i / 60;                      // improving over time
+        const errBpm = (rnd() < 0.5 ? -1 : 1) * Math.abs(rnd() * spread * skill + (rnd() < 0.15 ? 1.5 : 0));
+        st.add({ err: errBpm / 1.25, errBpm, mode: 'pair', difficulty: hard ? 'hard' : 'easy', pitchRange: rnd() < 0.2 ? 16 : 8,
+                 faderA: 0, faderB: 0, aName: 'Synth House 0' + (1 + i % 5) + ' 125bpm', bName: 'Synth House 0' + (2 + i % 4) + ' 127bpm',
+                 at: Date.now() - (40 - i) * 36e5 * 26 });
+      }
+      tx.oncomplete = () => { db.close(); res(); };
+    };
+  }));
   await page.click('#sheetClose').catch(() => {});
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(out, 'mixer.png') });
+  await page.click('#menuBtn'); await page.waitForTimeout(400);
+  await page.evaluate(() => document.getElementById('statsPanel').scrollIntoView()); await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(out, 'stats.png') });
+  await page.hover('#statsChart .hit:nth-of-type(30)').catch(() => {}); await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(out, 'stats-tip.png') });
+  await page.click('#statsTableBtn'); await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(out, 'stats-table.png') });
+  await page.click('#statsTableBtn'); await page.click('#sheetClose'); await page.waitForTimeout(200);
   await page.click('#menuBtn'); await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(out, 'sheet.png'), fullPage: false });
   await page.evaluate(() => document.querySelector('.sheet-body').scrollTo(0, 99999)); await page.waitForTimeout(200);

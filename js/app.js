@@ -1110,9 +1110,9 @@ revealBtn.addEventListener('click', async () => {
   const errBpm = bpmA ? bpmA * err / 100 : null;
   const absBpm = errBpm !== null ? Math.abs(errBpm) : null;
   sessionHistory.push({ err, errBpm });
-  db.saveRound({ err, errBpm, mode, difficulty, pitchRange,
-                 faderA: decks.A.fader, faderB: decks.B.fader,
-                 aName: a?.name, bName: b?.name }).catch(() => {});
+  await db.saveRound({ err, errBpm, mode, difficulty, pitchRange,
+                       faderA: decks.A.fader, faderB: decks.B.fader,
+                       aName: a?.name, bName: b?.name }).catch(() => {});
   const sEl = $('revealScore');
   if (absBpm !== null) {
     sEl.textContent = absBpm.toFixed(2);
@@ -1150,6 +1150,7 @@ revealBtn.addEventListener('click', async () => {
   $('strobeCaption').textContent = absErr <= 0.1 ? 'Strobe dots frozen — beat locked' : `Dots drifting ${dir} at your error rate`;
   overlay.classList.add('show');
   renderHistory();
+  renderStats();
 });
 
 $('retryBtn').addEventListener('click', () => { overlay.classList.remove('show'); startRound(true); });
@@ -1181,6 +1182,125 @@ async function renderHistory() {
   const allTime = all.length > sessionHistory.length ? ` · All-time <b>${all.length}</b> rounds` : '';
   $('sessionStat').innerHTML = `Rounds <b>${sessionHistory.length}</b>${statTail}${allTime}`;
 }
+
+// ---------- Progress (stats page, roadmap 5) ----------
+// Reads the rounds store every time the sheet opens. One series — BPM off per
+// round, oldest to newest — so no legend; dots carry the reveal's status colour
+// (position on the axis is the real encoding) and a rolling median in neutral
+// ink is the trend. Difficulty is a filter, not a second series. Everything
+// is plain SVG built here; no chart library, in keeping with no dependencies.
+let statsFilter = 'all';
+let statsAsTable = false;
+let statsRows = [];
+const bandOf = abs => abs <= 0.05 ? 'good' : abs <= 0.3 ? 'mid' : 'bad';
+function rollingMedian(xs, win) {
+  const out = [];
+  for (let i = 0; i < xs.length; i++) {
+    const w = xs.slice(Math.max(0, i - win + 1), i + 1).sort((a, b) => a - b);
+    out.push(w[w.length >> 1]);
+  }
+  return out;
+}
+async function renderStats() {
+  const panel = $('statsPanel');
+  const all = (await db.getRounds(5000).catch(() => [])).filter(r => typeof r.errBpm === 'number' && isFinite(r.errBpm));
+  panel.style.display = all.length ? 'block' : 'none';
+  if (!all.length) return;
+  statsRows = all;
+  const rows = statsFilter === 'all' ? all : all.filter(r => r.difficulty === statsFilter);
+  const abs = rows.map(r => Math.abs(r.errBpm));
+  $('kpiRounds').textContent = String(rows.length);
+  $('kpiBest').textContent = abs.length ? Math.min(...abs).toFixed(2) : '—';
+  const last20 = abs.slice(-20).sort((a, b) => a - b);
+  $('kpiMedian').textContent = last20.length ? last20[last20.length >> 1].toFixed(2) : '—';
+  $('kpiLocked').textContent = abs.length ? `${Math.round(100 * abs.filter(a => a <= 0.05).length / abs.length)}%` : '—';
+  renderStatsTable(rows);
+  renderStatsChart(rows, abs);
+}
+function renderStatsTable(rows) {
+  const t = $('statsTable');
+  t.hidden = !statsAsTable;
+  $('statsChart').style.display = statsAsTable ? 'none' : 'block';
+  if (!statsAsTable) return;
+  t.innerHTML = '';
+  [...rows].reverse().slice(0, 100).forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    const d = new Date(r.at);
+    row.innerHTML = `<span>${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${r.aName || '?'} / ${r.bName || '?'}</span>` +
+      `<span>${r.difficulty === 'hard' ? 'fine' : 'wide'} ±${r.pitchRange || 8}</span><b>${Math.abs(r.errBpm).toFixed(2)}</b>`;
+    t.appendChild(row);
+  });
+}
+function renderStatsChart(rows, abs) {
+  const wrap = $('statsChart');
+  wrap.innerHTML = '';
+  $('statsTip').hidden = true;
+  if (rows.length < 2) { wrap.innerHTML = '<div class="chart-empty">Reveal a couple of rounds and the trend appears here.</div>'; return; }
+  const W = 320, H = 150, padL = 30, padR = 8, padT = 8, padB = 18;
+  const sorted = [...abs].sort((a, b) => a - b);
+  const p90 = sorted[Math.floor(sorted.length * 0.9)];
+  const cap = Math.min(2, Math.max(0.3, Math.ceil(p90 * 10) / 10));     // y-axis top; outliers pinned there, hollow
+  const x = i => padL + (rows.length === 1 ? 0 : (i / (rows.length - 1)) * (W - padL - padR));
+  const y = v => padT + (1 - Math.min(v, cap) / cap) * (H - padT - padB);
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `BPM off per round, ${rows.length} rounds`);
+  const el = (tag, attrs, parent = svg) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
+  // Grid: the two reveal thresholds and the cap, labelled on the left.
+  for (const v of [0.05, 0.3, cap].filter(v => v <= cap)) {
+    el('line', { class: 'grid', x1: padL, x2: W - padR, y1: y(v), y2: y(v) });
+    const t = el('text', { class: 'axis-t', x: padL - 4, y: y(v) + 3, 'text-anchor': 'end' }); t.textContent = v.toFixed(2);
+  }
+  el('line', { class: 'grid', x1: padL, x2: W - padR, y1: y(0), y2: y(0) });
+  // Date ticks: first, last, and month boundaries in between (at most ~4).
+  const fmt = ts => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const ticks = [0, rows.length - 1];
+  const tFirst = el('text', { class: 'axis-t', x: x(0), y: H - 5, 'text-anchor': 'start' }); tFirst.textContent = fmt(rows[0].at);
+  if (rows.length > 1 && fmt(rows[rows.length - 1].at) !== fmt(rows[0].at)) {
+    const tLast = el('text', { class: 'axis-t', x: x(rows.length - 1), y: H - 5, 'text-anchor': 'end' }); tLast.textContent = fmt(rows[rows.length - 1].at);
+  }
+  // Rolling median line.
+  const med = rollingMedian(abs, 10);
+  el('path', { class: 'median', d: med.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ') });
+  // Dots with generous hit targets; tap/hover shows the pair.
+  const tip = $('statsTip');
+  const show = (i, cx, cy) => {
+    const r = rows[i];
+    tip.innerHTML = `<b>${Math.abs(r.errBpm).toFixed(2)} BPM off</b> · ${r.errBpm > 0 ? 'fast' : 'slow'}<br>${fmt(r.at)} · ${r.difficulty === 'hard' ? 'fine' : 'wide'} offset ±${r.pitchRange || 8}<br>${r.aName || '?'}<br>${r.bName || '?'}`;
+    tip.hidden = false;
+    // Positioned within #statsPanel (position: relative), above and near the dot.
+    const wr = wrap.getBoundingClientRect(), sx = wr.width / W;
+    const left = Math.max(0, Math.min(wrap.offsetLeft + wr.width - 224, wrap.offsetLeft + cx * sx - 60));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(0, wrap.offsetTop + cy * sx - 70)}px`;
+    svg.querySelectorAll('.dot.active').forEach(d => d.classList.remove('active'));
+    svg.querySelector(`.dot[data-i="${i}"]`)?.classList.add('active');
+  };
+  rows.forEach((r, i) => {
+    const a = Math.abs(r.errBpm), capped = a > cap;
+    const cx = x(i), cy = y(a);
+    el('circle', { class: `dot ${capped ? 'capped' : bandOf(a)}`, cx: cx.toFixed(1), cy: cy.toFixed(1), r: 3.5, 'data-i': i });
+    const hit = el('circle', { class: 'hit', cx: cx.toFixed(1), cy: cy.toFixed(1), r: 10 });
+    hit.addEventListener('pointerenter', () => show(i, cx, cy));
+    hit.addEventListener('pointerdown', e => { e.stopPropagation(); show(i, cx, cy); });
+  });
+  svg.addEventListener('pointerleave', () => { tip.hidden = true; svg.querySelectorAll('.dot.active').forEach(d => d.classList.remove('active')); });
+  wrap.appendChild(svg);
+}
+$('statsSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  statsFilter = btn.dataset.stats;
+  [...$('statsSeg').children].forEach(b => b.classList.toggle('on', b === btn));
+  renderStats();
+});
+$('statsTableBtn').addEventListener('click', () => {
+  statsAsTable = !statsAsTable;
+  $('statsTableBtn').setAttribute('aria-pressed', String(statsAsTable));
+  renderStats();
+});
 
 // ---------- Settings ----------
 $('diffSeg').addEventListener('click', e => {
@@ -1236,7 +1356,7 @@ $('focusBtn').addEventListener('click', () => {
   setBeatFocus(!beatFocus);
   db.setSetting('beatFocus', beatFocus).catch(() => {});
 });
-$('menuBtn').addEventListener('click', () => { renderProfile(); renderAudioProfile(); openSheet(true); });
+$('menuBtn').addEventListener('click', () => { renderProfile(); renderAudioProfile(); renderStats(); openSheet(true); });
 $('sheetClose').addEventListener('click', () => openSheet(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(false); });
 

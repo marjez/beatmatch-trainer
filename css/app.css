@@ -215,6 +215,38 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 .reveal-parity[hidden] { display: none; }
 .reveal-parity .stars { color: var(--amber); letter-spacing: 0.15em; }
 
+/* ---- Progress (stats) ---------------------------------------------------- */
+.kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.kpi { background: var(--plinth); border: 1px solid var(--edge); border-radius: 8px; padding: 8px 6px; text-align: center; min-width: 0; }
+.kpi-v { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--alloy); line-height: 1.1; }
+.kpi-l { font-family: var(--font-display); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--alloy-dim); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#statsPanel { position: relative; }
+.chart-wrap { margin-top: 10px; }
+.chart-wrap svg { display: block; width: 100%; height: auto; }
+.chart-wrap .grid { stroke: var(--edge); stroke-width: 1; }
+.chart-wrap .axis-t { font-family: var(--font-mono); font-size: 9px; fill: var(--alloy-dim); }
+.chart-wrap .median { fill: none; stroke: var(--alloy); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-wrap .dot { stroke: var(--panel); stroke-width: 1.5; }
+.chart-wrap .dot.good { fill: var(--lock); }
+.chart-wrap .dot.mid { fill: var(--amber); }
+.chart-wrap .dot.bad { fill: var(--strobe); }
+.chart-wrap .dot.capped { fill: var(--panel); stroke: var(--strobe); stroke-width: 1.5; }
+.chart-wrap .hit { fill: transparent; }
+.chart-wrap .dot.active { stroke: var(--alloy); stroke-width: 2; }
+.chart-empty { font-family: var(--font-mono); font-size: 11px; color: var(--alloy-dim); padding: 28px 0; text-align: center; }
+.chart-tip {
+  position: absolute; z-index: 5; pointer-events: none;
+  background: var(--platter); border: 1px solid var(--edge); border-radius: 6px;
+  padding: 6px 8px; font-family: var(--font-mono); font-size: 10px; color: var(--alloy); line-height: 1.5;
+  max-width: 220px; box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+.chart-tip b { color: var(--amber); font-weight: 600; }
+.chart-tip[hidden] { display: none; }
+.stats-table { margin-top: 10px; max-height: 220px; overflow-y: auto; border-top: 1px solid var(--edge); }
+.stats-table[hidden] { display: none; }
+.stats-table .history-row span:first-child { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+.range-btn[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); background: #2b2f38; }
+
 /* Crossfader: horizontal, grabbed by its knob like the pitch faders. The knob
    is a vertical bar with a centre line, and a tick marks the centre position. */
 .xfader { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 2px; }

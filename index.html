@@ -152,6 +152,28 @@
       <div class="setting-hint">Fallback: starts both decks on one audio-clock tick, phrase-aligned. Real decks are started one at a time with Play and Cue, which is what the mixer screen is for.</div>
     </div>
 
+    <div class="panel" id="statsPanel" style="display:none;">
+      <div class="panel-label">Progress</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-v" id="kpiRounds">0</div><div class="kpi-l">rounds</div></div>
+        <div class="kpi"><div class="kpi-v" id="kpiBest">—</div><div class="kpi-l">best</div></div>
+        <div class="kpi"><div class="kpi-v" id="kpiMedian">—</div><div class="kpi-l">median &middot; 20</div></div>
+        <div class="kpi"><div class="kpi-v" id="kpiLocked">—</div><div class="kpi-l">locked</div></div>
+      </div>
+      <div class="settings-row" style="margin-top:10px;">
+        <div class="seg" id="statsSeg">
+          <button data-stats="all" class="on">All</button>
+          <button data-stats="easy">Wide offset</button>
+          <button data-stats="hard">Fine offset</button>
+        </div>
+        <button class="range-btn" id="statsTableBtn" aria-pressed="false" aria-label="Show as table">Table</button>
+      </div>
+      <div class="chart-wrap" id="statsChart"></div>
+      <div class="chart-tip" id="statsTip" hidden></div>
+      <div class="stats-table" id="statsTable" hidden></div>
+      <div class="setting-hint" id="statsHint">Every round you reveal, oldest to newest. Dots are BPM off, coloured like the reveal (green &le;0.05, amber &le;0.3, red above); the line is the rolling median of the last ten. Tap a dot for the pair.</div>
+    </div>
+
     <div class="panel" id="historyPanel" style="display:none;">
       <div class="panel-label">This session</div>
       <div class="session-stat" id="sessionStat">Rounds <b>0</b></div>

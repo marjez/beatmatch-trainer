@@ -1,0 +1,60 @@
+<!doctype html><meta charset=utf-8><title>stats</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Progress panel: KPIs, dots, rolling median and filters computed from a
+// seeded rounds store must match what the numbers say; tapping a dot shows
+// that round's pair; the table view lists the same rows.
+import { post, sleep, bootApp, waitFor } from './lib.js';
+const R = { failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+try {
+  const app = await bootApp();
+  const { w, g } = app;
+  // Seed: 25 rounds, known values.
+  const seeded = [];
+  for (let i = 0; i < 25; i++) {
+    const errBpm = [0.02, -0.4, 0.8, 0.05, -0.12, 2.5, 0.3, 0.031, -0.06, 0.9][i % 10] * (1 - i / 50);
+    seeded.push({ err: errBpm / 1.25, errBpm, mode: 'pair', difficulty: i % 3 ? 'easy' : 'hard', pitchRange: 8, faderA: 0, faderB: 0,
+                  aName: 'A' + i, bName: 'B' + i, at: Date.now() - (25 - i) * 864e5 });
+  }
+  await new Promise(res => { const q = w.indexedDB.open('beatmatch-trainer'); q.onsuccess = () => { const db = q.result, tx = db.transaction('rounds', 'readwrite'); for (const r of seeded) tx.objectStore('rounds').add(r); tx.oncomplete = () => { db.close(); res(); }; }; });
+  g('menuBtn').click();
+  await waitFor(() => g('statsPanel').style.display === 'block' && g('statsChart').querySelector('svg'), 5000, 'stats panel');
+  const abs = seeded.map(r => Math.abs(r.errBpm));
+  const med = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
+  R.kpi = { rounds: g('kpiRounds').textContent, best: g('kpiBest').textContent, median: g('kpiMedian').textContent, locked: g('kpiLocked').textContent };
+  if (R.kpi.rounds !== '25') fail('rounds kpi', R.kpi);
+  if (R.kpi.best !== Math.min(...abs).toFixed(2)) fail('best kpi', R.kpi);
+  if (R.kpi.median !== med(abs.slice(-20)).toFixed(2)) fail('median kpi', R.kpi);
+  if (R.kpi.locked !== Math.round(100 * abs.filter(a => a <= 0.05).length / 25) + '%') fail('locked kpi', R.kpi);
+  const svg = g('statsChart').querySelector('svg');
+  R.dots = svg.querySelectorAll('.dot').length;
+  if (R.dots !== 25) fail('dot count', R.dots);
+  // Dots are in x order and the y of the last dot matches its band colour.
+  const dots = [...svg.querySelectorAll('.dot')];
+  const last = dots[24], aLast = abs[24];
+  const band = aLast <= 0.05 ? 'good' : aLast <= 0.3 ? 'mid' : 'bad';
+  if (!last.classList.contains(band) && !last.classList.contains('capped')) fail('band colour', { cls: last.className.baseVal, aLast });
+  const xs = dots.map(d => +d.getAttribute('cx'));
+  if (!xs.every((x, i) => i === 0 || x > xs[i - 1])) fail('dots not in order');
+  // Tooltip on tap.
+  svg.querySelectorAll('.hit')[24].dispatchEvent(new w.PointerEvent('pointerdown', { bubbles: true }));
+  await sleep(30);
+  R.tip = g('statsTip').textContent;
+  if (g('statsTip').hidden || !R.tip.includes('A24') || !R.tip.includes(aLast.toFixed(2))) fail('tooltip', R.tip);
+  // Filter: fine offset only.
+  g('statsSeg').querySelector('[data-stats="hard"]').click(); await sleep(150);
+  const hardN = seeded.filter(r => r.difficulty === 'hard').length;
+  R.filtered = { rounds: g('kpiRounds').textContent, dots: g('statsChart').querySelectorAll('.dot').length };
+  if (R.filtered.rounds !== String(hardN) || R.filtered.dots !== hardN) fail('filter', { ...R.filtered, hardN });
+  // Table view.
+  g('statsTableBtn').click(); await sleep(150);
+  R.table = { hidden: g('statsTable').hidden, rows: g('statsTable').querySelectorAll('.history-row').length, chartShown: g('statsChart').style.display };
+  if (R.table.hidden || R.table.rows !== hardN || R.table.chartShown !== 'none') fail('table view', R.table);
+  g('statsTableBtn').click(); g('statsSeg').querySelector('[data-stats="all"]').click(); await sleep(100);
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>

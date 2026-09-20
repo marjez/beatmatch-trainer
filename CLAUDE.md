@@ -173,7 +173,9 @@ What works, and why each part is load-bearing:
 - Result metric: BPM error = deck A's tagged BPM × tempo error %. The reveal
   headline is "N.NN BPM off" (owner's preferred metric — no score out of 100).
   Falls back to percent only if deck A has no BPM. Color bands: good ≤ 0.05 BPM,
-  mid ≤ 0.3 BPM, bad above. Rounds store saves {err, errBpm}.
+  mid ≤ 0.3 BPM, bad above. Rounds store saves {err, errBpm, mode, difficulty,
+  pitchRange, faderA, faderB, aName, bName, at} — db.saveRound used to drop the
+  faders; fixed 2026-09-20.
 - Nudge is temporary (±2% while held), snaps back on release — like platter touch.
 - BPM priority: filename "NNNbpm" > manual entry > auto-detection
   (web-audio-beat-detector, vendored, constrained 80–159; the old lowpass peak
@@ -193,6 +195,11 @@ What works, and why each part is load-bearing:
 - Headphone split toggle: StereoPannerNode per deck, A hard left / B hard right,
   off by default, persisted in the settings store.
 - BPM detection uses vendored web-audio-beat-detector.
+- Progress panel (2026-09-20, roadmap 5) in the sheet: KPI tiles (rounds, best,
+  median of last 20, % locked ≤0.05), an SVG chart of BPM off per round with a
+  rolling median of 10, difficulty filter, tap-for-pair tooltip, table view.
+  Plain SVG, no library; one series so no legend; dot colour = reveal band.
+  Rounds without errBpm (pre-BPM-metric records) are skipped.
 - Crossfader (2026-09-20) replaced the two channel faders: equal-power curve,
   centre = both decks at cos(π/4), position persisted as setting 'xfade'. The
   pitch faders got the width back. bindFader takes axis 'x'|'y'; the grab-the-
@@ -217,9 +224,6 @@ What works, and why each part is load-bearing:
 - "Prodigy - breathe 130.02bpm.mp3" vanished from the crate folder between Aug 2
   and Sept 20. crate_sync provably didn't remove it (it only renames untagged
   files and only deletes a lossless original after converting it).
-- Next feature if the mechanic checks out: the stats page (roadmap 5). Rounds
-  already persist err/errBpm/difficulty/pitchRange/faderA/faderB and nothing
-  reads them back except a count, so there's no way to see improvement.
 - NOT worth building yet: beat-phase scoring (roadmap 3). With a phase-locked
   start, drift at reveal is just tempo error x elapsed time — it would mostly
   restate the score already shown.
@@ -227,7 +231,6 @@ What works, and why each part is load-bearing:
 ## Roadmap (owner-approved directions, build when asked)
 3. Beat-phase scoring: score not just tempo but beat alignment (onset offset at reveal).
 4. Daily challenge: seeded pair-of-the-day from own crate (date-seeded PRNG), streak counter.
-5. Stats page: all-time chart from the rounds store (score over time, by mode/difficulty).
 7. Crate manager: tag tracks, filter pairs by tag (mirrors Rekordbox playlists).
 8. Export/import crate metadata as JSON (not audio) for device migration.
 
