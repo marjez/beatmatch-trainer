@@ -1,0 +1,118 @@
+<!doctype html><meta charset=utf-8><title>latency</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Press-to-sound for the per-deck transport, measured on the audio clock.
+//
+// The owner's target is CDJ-class: under 10 ms from the finger landing on Play
+// or Cue to the downbeat leaving the speaker. Anything the app adds on top of
+// the AudioContext's own base latency is ours to remove. Also checks that what
+// plays from offset 0 IS the downbeat: first onset at the scheduled start, and
+// every following kick exactly 60/bpm/rate later. Stop latency is measured
+// against the drone the synthetic tracks carry under the beat.
+import { post, sleep, bootApp, loadCrate, waitReady, tapMaster, pev, tap, stats, waitFor } from './lib.js';
+try {
+  const app = await bootApp();
+  await loadCrate(app);
+  await waitReady(app);
+  const { w, g, bmt } = app;
+  const ctx = bmt.ctx;
+  const R = { sampleRate: ctx.sampleRate, baseLatencyMs: +(ctx.baseLatency * 1000).toFixed(2),
+              outputLatencyMs: +((ctx.outputLatency || 0) * 1000).toFixed(2), state: ctx.state,
+              graphBuiltBeforeFirstPress: !!bmt.master && !!bmt.decks.A.gain };
+  // Cold press: the very first press of the session, JS clock only.
+  {
+    const d = bmt.decks.A, t0 = ctx.currentTime, p0 = performance.now();
+    pev(w, g('playA'), 'pointerdown');
+    R.firstPressEver = { scheduledStartMs: +((d.mark - t0) * 1000).toFixed(2), handlerSyncMs: +(performance.now() - p0).toFixed(2), playing: d.playing };
+    await sleep(60); pev(w, g('playA'), 'pointerup');
+    await sleep(200); pev(w, g('playA'), 'pointerdown'); await sleep(60); pev(w, g('playA'), 'pointerup');
+  }
+  const rec = await tapMaster(app);
+  const quantumMs = 128 / ctx.sampleRate * 1000;
+
+  const stopAll = async () => {
+    for (const id of ['A', 'B']) if (bmt.decks[id].playing) { pev(w, g('play' + id), 'pointerdown'); await sleep(40); pev(w, g('play' + id), 'pointerup'); }
+    await sleep(150);
+  };
+  const track = id => bmt.tracks.find(t => t.id === (id === 'A' ? bmt.round.aId : bmt.round.bId));
+
+  async function measureStart(id, btn, holdMs) {
+    await stopAll();
+    bmt.decks[id].offset = 0;
+    rec.clear(); await sleep(100);
+    const t0 = ctx.currentTime, p0 = performance.now();
+    pev(w, g(btn + id), 'pointerdown');
+    const handlerSyncMs = performance.now() - p0;
+    const d = bmt.decks[id];
+    const sched = d.mark;
+    await sleep(holdMs);
+    const t1 = ctx.currentTime;
+    pev(w, g(btn + id), 'pointerup');
+    const p1 = performance.now();
+    await sleep(400); await rec.settle(t1 + 0.35);
+    const first = rec.firstSound(t0, 0.01);
+    const ons = rec.onsets(t0, t1);
+    const gaps = ons.slice(1).map((t, i) => (t - ons[i]) * 1000);
+    const period = 60 / track(id).bpm / bmt.rateFor(id) * 1000;
+    const out = {
+      pressToSoundMs: first !== null ? +((first - t0) * 1000).toFixed(2) : null,
+      scheduledStartMs: +((sched - t0) * 1000).toFixed(2),
+      firstOnsetVsScheduledMs: ons.length ? +((ons[0] - sched) * 1000).toFixed(2) : null,
+      onsetGapErrMs: gaps.length ? stats(gaps.map(x => x - period)) : null,
+      handlerSyncMs: +handlerSyncMs.toFixed(2),
+    };
+    if (btn === 'cue') {
+      const last = rec.lastSound(t1, t1 + 0.35, 0.008);
+      out.releaseToSilenceMs = last !== null ? +((last - t1) * 1000).toFixed(2) : 0;
+      out.stateAfter = { previewing: d.previewing, playing: d.playing, offset: d.offset };
+    }
+    return out;
+  }
+
+  const playA = [], playB = [], cueA = [], cueB = [];
+  for (let i = 0; i < 5; i++) {
+    playA.push(await measureStart('A', 'play', 70));
+    playB.push(await measureStart('B', 'play', 70));
+    cueA.push(await measureStart('A', 'cue', 900));
+    cueB.push(await measureStart('B', 'cue', 900));
+  }
+  const summary = xs => ({
+    pressToSoundMs: stats(xs.map(x => x.pressToSoundMs).filter(x => x !== null)),
+    scheduledStartMs: stats(xs.map(x => x.scheduledStartMs)),
+    firstOnsetVsScheduledMs: stats(xs.map(x => x.firstOnsetVsScheduledMs).filter(x => x !== null)),
+    handlerSyncMs: stats(xs.map(x => x.handlerSyncMs)),
+    onsetGapErrMaxAbsMs: Math.max(...xs.map(x => x.onsetGapErrMs ? Math.max(Math.abs(x.onsetGapErrMs.min), Math.abs(x.onsetGapErrMs.max)) : 0)),
+    ...(xs[0].releaseToSilenceMs !== undefined ? { releaseToSilenceMs: stats(xs.map(x => x.releaseToSilenceMs)), stateAfter: xs[0].stateAfter } : {}),
+  });
+  R.quantumMs = +quantumMs.toFixed(2);
+  R.playA = summary(playA); R.playB = summary(playB); R.cueA = summary(cueA); R.cueB = summary(cueB);
+
+  // Stop: playing, press play again -> silence within a quantum.
+  await stopAll();
+  const stops = [];
+  for (let i = 0; i < 5; i++) {
+    pev(w, g('playA'), 'pointerdown'); await sleep(40); pev(w, g('playA'), 'pointerup'); await sleep(500);
+    const t1 = ctx.currentTime;
+    pev(w, g('playA'), 'pointerdown'); await sleep(40); pev(w, g('playA'), 'pointerup');
+    await sleep(350); await rec.settle(t1 + 0.3);
+    const last = rec.lastSound(t1, t1 + 0.3, 0.008);
+    stops.push(last !== null ? +((last - t1) * 1000).toFixed(2) : 0);
+  }
+  R.stopA_pressToSilenceMs = stats(stops);
+
+  // Back-cue: playing, tap cue -> stops and rewinds to 0; next play starts on the downbeat again.
+  pev(w, g('playA'), 'pointerdown'); await sleep(40); pev(w, g('playA'), 'pointerup'); await sleep(600);
+  const t1 = ctx.currentTime;
+  pev(w, g('cueA'), 'pointerdown'); await sleep(60); pev(w, g('cueA'), 'pointerup');
+  await sleep(350); await rec.settle(t1 + 0.3);
+  const last = rec.lastSound(t1, t1 + 0.3, 0.008);
+  R.backCueA = { tapToSilenceMs: last !== null ? +((last - t1) * 1000).toFixed(2) : 0,
+                 offsetAfter: bmt.decks.A.offset, playing: bmt.decks.A.playing, previewing: bmt.decks.A.previewing };
+
+  R.jsErrors = app.errs;
+  R.verdict = 'scheduledStart ~0 (starts on the press); pressToSound ~ quantum + baseLatency; firstOnsetVsScheduled ~0 (offset 0 is the downbeat); onset gap err ~0; stop/release within a quantum or two';
+  rec.disconnect();
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e) }); }
+</script>

@@ -45,9 +45,27 @@ function toast(msg, ms = 2800) {
 // the top end — hats and transient detail are exactly what you beatmatch against.
 // A 180 s mono window at 48 kHz is 34.6 MB per deck, which is affordable.
 function ensureCtx() {
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === 'suspended') ctx.resume();
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    // iOS 17+: without this Safari treats Web Audio as "ambient" — the ring/
+    // silent switch mutes it and the session runs with a larger output buffer.
+    // 'playback' is what a music app asks for.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  }
+  if (ctx.state === 'suspended' || ctx.state === 'interrupted') ctx.resume();
   return ctx;
+}
+// The first touch anywhere resumes the context, so Play and Cue never pay for
+// resume() on the press that matters. Registered at init, not on the buttons.
+function unlockAudioOnFirstTouch() {
+  const unlock = () => {
+    ensureMaster();
+    for (const id of DECKS) ensureChain(id);
+    document.removeEventListener('pointerdown', unlock, true);
+    document.removeEventListener('keydown', unlock, true);
+  };
+  document.addEventListener('pointerdown', unlock, true);
+  document.addEventListener('keydown', unlock, true);
 }
 
 // ---------- Master bus ----------
@@ -461,6 +479,7 @@ function loadDeck(id, track) {
     if (d.token !== token) return;                      // a newer round won
     try {
       const c = ensureCtx();
+      ensureChain(id);                                  // graph ready before the first press
       const full = await ctx.decodeAudioData(await track.blob.arrayBuffer());
       if (d.token !== token) return;
       const start = Math.floor(phraseStart(track, full.duration) * c.sampleRate);
@@ -618,8 +637,19 @@ function updateTransport() {
     $('cue' + id).classList.toggle('held', d.previewing);
   }
 }
+// Transport acts on the PRESS. A click event fires on release, so a play button
+// bound to click starts the deck a whole tap later — measured 90 ms of the
+// 108 ms press-to-sound, with the audio stack accounting for the rest.
+// A CDJ starts on the down-stroke; so does this.
 for (const id of DECKS) {
-  $('play' + id).addEventListener('click', () => decks[id].playing ? stopDeck(id) : playDeck(id));
+  const play = $('play' + id);
+  play.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    decks[id].playing ? stopDeck(id) : playDeck(id);
+  });
+  play.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); decks[id].playing ? stopDeck(id) : playDeck(id); }
+  });
   const cue = $('cue' + id);
   cue.addEventListener('pointerdown', e => { e.preventDefault(); cuePress(id); });
   cue.addEventListener('pointerup', () => cueRelease(id));
@@ -1057,6 +1087,15 @@ function registerSW() {
     .catch(() => {});
 }
 
+// ---------- Harness hook ----------
+// Read-only handles for tools/harness: the browser tests tap the master bus to
+// measure press-to-sound and beat alignment against the audio clock. Nothing in
+// the app reads this.
+window.__bmt = {
+  get ctx() { return ctx; }, get master() { return master; }, get round() { return round; },
+  get tracks() { return tracks; }, decks, rateFor, phraseStart,
+};
+
 // ---------- Init ----------
 async function init() {
   db.requestPersistence();
@@ -1065,6 +1104,7 @@ async function init() {
   try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
   catch { setPitchRange(BASE_RANGE); }
   renderAllFaders();
+  unlockAudioOnFirstTouch();
   window.addEventListener('resize', renderAllFaders);
   // The faders now flex to fill the viewport, so their pixel height isn't known
   // until layout settles — and changes on rotate or when the URL bar hides.

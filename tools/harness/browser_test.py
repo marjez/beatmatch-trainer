@@ -9,7 +9,7 @@ clipping in the mix, GC stalls freezing the fader, requestAnimationFrame adding
 latency, full-track decoding blowing iOS memory. Reach for it before theorising.
 
 Usage:
-    python3 tools/harness/browser_test.py <dir-to-serve> <page.html> [--timeout 90]
+    python3 tools/harness/browser_test.py <dir-to-serve> <page.html> [--timeout=90] [--mount=/crate=DIR]
 
 The page should finish with:
     fetch('/result', {method:'POST', body: JSON.stringify(findings)})
@@ -25,6 +25,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 from pathlib import Path
 
 BROWSERS = [
@@ -44,7 +45,9 @@ def find_browser():
     return None
 
 
-def serve(directory: Path, port: int, out: Path):
+def serve(directory: Path, port: int, out: Path, mounts=None):
+    mounts = mounts or {}
+
     class H(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **k):
             super().__init__(*a, directory=str(directory), **k)
@@ -52,14 +55,29 @@ def serve(directory: Path, port: int, out: Path):
         def log_message(self, *a):
             pass
 
+        def translate_path(self, path):
+            clean = path.split("?", 1)[0].split("#", 1)[0]
+            for prefix, root in mounts.items():
+                if clean.startswith(f"/{prefix}/"):
+                    rel = clean[len(prefix) + 2:]
+                    return str(root / urllib.parse.unquote(rel))
+            return super().translate_path(path)
+
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
         def do_POST(self):
             n = int(self.headers.get("Content-Length", 0))
             out.write_bytes(self.rfile.read(n))
             self.send_response(204)
             self.end_headers()
 
-    socketserver.TCPServer.allow_reuse_address = True
-    httpd = socketserver.TCPServer(("127.0.0.1", port), H)
+    # Threaded: the app, its service worker and a test all fetch at once, and a
+    # 10 MB audio file on a single-threaded server stalls everything behind it.
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    socketserver.ThreadingTCPServer.daemon_threads = True
+    httpd = socketserver.ThreadingTCPServer(("127.0.0.1", port), H)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd
 
@@ -81,11 +99,19 @@ def main():
         print("No Chrome/Chromium found. On Ubuntu: sudo apt install chromium-browser")
         sys.exit(2)
 
+    # --mount=/prefix=DIR serves a second directory under /prefix/ so a test can
+    # load the real app and a synthetic crate from one origin.
+    mounts = {}
+    for a in sys.argv[1:]:
+        if a.startswith("--mount="):
+            prefix, _, path = a[len("--mount="):].partition("=")
+            mounts[prefix.strip("/")] = Path(path).resolve()
+
     port = 8900
     # ignore_cleanup_errors: the browser is still flushing its profile as we exit
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         out = Path(tmp) / "result.json"
-        httpd = serve(directory, port, out)
+        httpd = serve(directory, port, out, mounts)
         proc = subprocess.Popen(
             [browser, "--headless=new", "--disable-gpu", "--no-sandbox",
              "--autoplay-policy=no-user-gesture-required",
