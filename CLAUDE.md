@@ -42,6 +42,32 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
   which the file picker accepts alongside audio. No grid → old 25%-in fallback.
 
+## Why it sounds right or wrong (researched + measured, Sept 2026)
+The app was "harder to hear the match on" than Beatmatch PRO for three concrete
+reasons, all fixed. Don't undo any of them.
+
+1. PHASE LOCK IS THE WHOLE MECHANIC. A tempo error is only audible as a flam,
+   and two transients stop reading as one drum once they're ~20-50 ms apart.
+   Starting decks with two separate play taps leaves them up to half a beat
+   (240 ms at 125 BPM) out — far outside that window, so you hear two unrelated
+   rhythms and the tempo error is effectively inaudible. Nudge can't rescue it:
+   closing 240 ms at 2% takes 12 seconds of holding. dropBoth() schedules both
+   sources on one audio-clock tick from offset 0, and since both windows begin on
+   a downbeat that puts them in unison. Individual play buttons remain for
+   listening to one deck alone.
+2. THE MIX WAS CLIPPING. Two modern masters at deck gain summed to peak 1.64 and
+   hard-clipped 0.64-1.3% of samples at the destination — and clipping lands on
+   the kick transients, flattening the very attacks you listen for. The master
+   bus is 0.5 with a DynamicsCompressor as a safety limiter: measured peak 0.909,
+   0% clipped. Keep the headroom; don't "fix" the app being quieter by raising it.
+3. NATIVE SAMPLE RATE ONLY. We used to force 32 kHz. Forcing a non-native rate is
+   a documented cause of crackle/distortion on iOS, and it threw away the top end
+   that carries transient detail. A 180 s mono window at 48 kHz is 34.6 MB/deck.
+
+Beat focus (low-pass to ~220 Hz on the master) strips the mix down to kick and
+low end so the flam is unmistakable. It's the EQ-kill move you'd make on the PX5,
+not a visual cue, so it doesn't violate the honest-ear-training rule.
+
 ## Audio architecture (both naive options are wrong — measured)
 Playback is an AudioBufferSourceNode fed from a WINDOWED MONO buffer. Both
 obvious alternatives were tried on real tracks and both failed:

@@ -13,6 +13,7 @@ const mode = 'pair';        // always two different tracks; recorded on saved ro
 let difficulty = 'easy';
 let round = null;           // {aIdx, bIdx, hidden, r0}
 let split = false;          // headphone split: A hard left, B hard right
+let beatFocus = false;      // low-pass the master so only the kicks remain
 let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
 // Both decks are fully live: each has its own pitch fader, nudge and level, and
 // the score is the tempo difference BETWEEN them. offset/mark track the playhead
@@ -39,19 +40,53 @@ function toast(msg, ms = 2800) {
   clearTimeout(t._h);
   t._h = setTimeout(() => t.classList.remove('show'), ms);
 }
-// A reduced-rate context halves the cost of every decoded sample. decodeAudioData
-// resamples to the context rate as it decodes, so this bounds the decode itself,
-// not just what we keep. 32 kHz keeps 16 kHz of bandwidth — hats still sound like
-// hats, which is what you beatmatch against.
-const CTX_RATE = 32000;
+// Run at the device's native rate. Forcing a non-native rate (we used to ask for
+// 32 kHz) is a known cause of crackle and distortion on iOS, and it threw away
+// the top end — hats and transient detail are exactly what you beatmatch against.
+// A 180 s mono window at 48 kHz is 34.6 MB per deck, which is affordable.
 function ensureCtx() {
-  if (!ctx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    try { ctx = new AC({ sampleRate: CTX_RATE }); }
-    catch { ctx = new AC(); }          // older Safari ignores the option
-  }
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === 'suspended') ctx.resume();
   return ctx;
+}
+
+// ---------- Master bus ----------
+// Two modern masters both peak near full scale. Summing them at deck gain hit
+// 1.64 and hard-clipped 0.64% of samples at the destination — and clipping lands
+// on the kick transients, flattening the very attacks you listen to. Halve the
+// bus so the sum has headroom, and keep a limiter purely as a safety net.
+let master = null;
+const BEAT_FOCUS_HZ = 220;
+function ensureMaster() {
+  if (master) return master;
+  const c = ensureCtx();
+  const input = c.createGain();
+  input.gain.value = 0.5;
+  // Low-pass "beat focus": kills the mids and highs so only the kick and low end
+  // remain. Two kicks a few ms apart flam unmistakably once the mix is out of the
+  // way. This is what you'd do with the EQ kills on the PX5 — not a visual cue.
+  const focus = c.createBiquadFilter();
+  focus.type = 'lowpass';
+  focus.frequency.value = 20000;
+  focus.Q.value = 0.7;
+  const limiter = c.createDynamicsCompressor();
+  limiter.threshold.value = -1.5;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.12;
+  input.connect(focus); focus.connect(limiter); limiter.connect(c.destination);
+  master = { input, focus, limiter };
+  return master;
+}
+function setBeatFocus(on) {
+  beatFocus = on;
+  const btn = $('focusBtn');
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-pressed', String(on));
+  if (!master) return;
+  const c = ensureCtx();
+  master.focus.frequency.setTargetAtTime(on ? BEAT_FOCUS_HZ : 20000, c.currentTime, 0.02);
 }
 function bpmFromName(name) {
   // Capture the decimals too — Rekordbox analyses to ~126.02, and dropping the
@@ -390,12 +425,13 @@ function ensureChain(id) {
   const d = decks[id];
   if (!d.gain) {
     d.gain = c.createGain();
+    const bus = ensureMaster().input;
     if (c.createStereoPanner) {
       d.panner = c.createStereoPanner();
       d.gain.connect(d.panner);
-      d.panner.connect(c.destination);
+      d.panner.connect(bus);
     } else {
-      d.gain.connect(c.destination);  // pre-14.1 Safari: split silently unavailable
+      d.gain.connect(bus);            // pre-14.1 Safari: split silently unavailable
     }
     applySplit();
   }
@@ -452,6 +488,7 @@ function markPosition(id) {
   const d = decks[id];
   if (!d.playing || !ctx) return;
   const now = ctx.currentTime;
+  if (now <= d.mark) return;      // scheduled for the future, hasn't started yet
   d.offset += (now - d.mark) * d.rate;
   d.mark = now;
 }
@@ -463,7 +500,7 @@ function applyRate(id) {
   if (d.source) d.source.playbackRate.value = d.rate;
 }
 
-function startSource(id, from) {
+function startSource(id, from, when) {
   const c = ensureCtx();
   const d = ensureChain(id);
   if (!d.buffer) return false;
@@ -474,10 +511,11 @@ function startSource(id, from) {
   d.rate = rateFor(id);
   src.playbackRate.value = d.rate;
   const at = Math.max(0, Math.min(from, d.buffer.duration - 0.05));
-  src.start(0, at);
+  const startAt = when || 0;
+  src.start(startAt, at);
   d.source = src;
   d.offset = at;
-  d.mark = c.currentTime;
+  d.mark = Math.max(startAt, c.currentTime);
   d.playing = true;
   src.onended = () => {
     if (d.source === src) { d.source = null; d.playing = false; updateTransport(); }
@@ -489,6 +527,28 @@ function stopSource(id) {
   markPosition(id);
   if (d.source) { d.source.onended = null; try { d.source.stop(); } catch {} d.source = null; }
   d.playing = false;
+}
+
+// Drop both decks phase-locked.
+//
+// This is the whole point of the app working or not. A tempo error is only
+// audible as a flam, and two transients stop reading as a flam once they are
+// more than ~20-50 ms apart. Starting the decks by tapping two play buttons
+// leaves them up to half a beat (~240 ms at 125 BPM) out, which is far outside
+// that window — so you hear two unrelated rhythms and the tempo error is
+// effectively inaudible. Nudge can't rescue it either: closing a 240 ms gap at
+// 2% takes twelve seconds of holding.
+//
+// Both windows begin exactly on a downbeat, so starting them on the same audio
+// clock tick puts the beats in unison. From there any drift you hear IS your
+// tempo error, which is the signal you're training on.
+function dropBoth() {
+  if (!round) return;
+  const c = ensureCtx();
+  if (!decks.A.ready || !decks.B.ready) { toast('Still loading the pair…'); return; }
+  const when = c.currentTime + 0.12;      // a beat of lead-in so both get scheduled
+  for (const id of DECKS) startSource(id, 0, when);
+  updateTransport();
 }
 
 function playDeck(id) {
@@ -852,6 +912,7 @@ function setSplit(on) {
 function updateButtons() {
   newPairBtn.disabled = !canStart();
   revealBtn.disabled = !round;
+  $('dropBtn').disabled = !round;
 }
 
 // ---------- Crate & settings sheet ----------
@@ -870,6 +931,11 @@ $('detectBtn').addEventListener('click', async () => {
     ? `Detected BPM for ${before - after} track${before - after > 1 ? 's' : ''}.`
     : 'Could not detect a tempo — type it in instead.');
 });
+$('dropBtn').addEventListener('click', dropBoth);
+$('focusBtn').addEventListener('click', () => {
+  setBeatFocus(!beatFocus);
+  db.setSetting('beatFocus', beatFocus).catch(() => {});
+});
 $('menuBtn').addEventListener('click', () => openSheet(true));
 $('sheetClose').addEventListener('click', () => openSheet(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(false); });
@@ -877,7 +943,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v14';
+const APP_BUILD = 'bmt-v15';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -911,6 +977,7 @@ function registerSW() {
 async function init() {
   db.requestPersistence();
   try { setSplit(await db.getSetting('split', false)); } catch {}
+  try { setBeatFocus(await db.getSetting('beatFocus', false)); } catch {}
   try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
   catch { setPitchRange(BASE_RANGE); }
   renderAllFaders();
