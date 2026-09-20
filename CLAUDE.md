@@ -29,9 +29,12 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 - There is NO zero snap. A detent you can feel is one you can't be precise
   inside, and 0.1 BPM is ~2px of raw fader travel. The green lamp reports being
   within DETENT_BPM of zero instead of snapping there. Don't reintroduce a snap.
-- Faders drag RELATIVELY. Pressing anchors, only movement changes the value.
-  Do NOT reintroduce jump-to-finger: it made small corrections impossible, since
-  the first touch threw the setting wherever the thumb landed.
+- You GRAB THE KNOB and it stays under your thumb. Press within the knob plus
+  GRAB_SLOP and it tracks 1:1 from where you took hold; press the bare track and
+  nothing happens, like the plinth of a 1210. Two earlier models both failed:
+  jump-to-finger threw the value wherever you touched, and relative-from-anywhere
+  let the knob drift away from the finger until you were dragging at the top of
+  the fader while the knob sat at the bottom. Don't go back to either.
 - Pitch faders have fine-drag: horizontal distance from the fader scales vertical
   sensitivity (1/(1+dx/30)) — 0.038 BPM/px straight down, 0.008 BPM/px at 120px
   out. Movement is integrated incrementally, never recomputed from the press

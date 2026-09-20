@@ -718,47 +718,106 @@ function fineFactor(dx) { return 1 / (1 + Math.abs(dx) / FINE_FALLOFF); }
 // small corrections impossible — you could never rest a thumb without throwing
 // the setting. The whole track stays grabbable, so there's no fiddly knob-sized
 // target to hit, but nothing moves until you move.
-function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
-  let dragging = false, frac = 0, lastY = 0, box = null, pendingFine = 1;
-  const clamp = v => Math.max(0, Math.min(1, v));
+// ---------- Touch profiler ----------
+// Every latency number so far came from a desktop harness, which is not the
+// input pipeline a phone uses. This records what actually happens during a real
+// drag on the real device so the next fix is aimed at measured behaviour.
+const dragProfiler = {
+  times: [], frames: 0, rafId: null, last: null,
+  sample() {
+    const t = performance.now();
+    if (this.last !== null) this.times.push(t - this.last);
+    this.last = t;
+    if (this.rafId === null) {
+      this.frames = 0;
+      const tick = () => { this.frames++; this.rafId = requestAnimationFrame(tick); };
+      this.rafId = requestAnimationFrame(tick);
+    }
+  },
+  finish() {
+    if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
+    const g = this.times.slice();
+    this.times = []; this.last = null;
+    if (g.length < 5) return;
+    const sorted = [...g].sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    const worst = sorted[sorted.length - 1];
+    const span = g.reduce((a, b) => a + b, 0);
+    this.lastReport = {
+      moves: g.length + 1,
+      hz: med > 0 ? Math.round(1000 / med) : null,
+      medianGapMs: +med.toFixed(1),
+      worstGapMs: +worst.toFixed(1),
+      stalls: g.filter(x => x > 40).length,
+      fps: span > 0 ? Math.round(this.frames / (span / 1000)) : 0,
+    };
+    renderProfile();
+  },
+  lastReport: null,
+};
+function renderProfile() {
+  const el = $('touchProfile');
+  if (!el) return;
+  const r = dragProfiler.lastReport;
+  el.textContent = r
+    ? `${r.moves} moves · ${r.hz ? r.hz + ' Hz' : '—'} touch · ${r.fps} fps · `
+      + `median gap ${r.medianGapMs} ms · worst ${r.worstGapMs} ms · ${r.stalls} stalls >40 ms`
+    : 'Drag a pitch fader, then reopen this menu.';
+}
 
-  // Paint SYNCHRONOUSLY in the move handler. Batching to requestAnimationFrame
-  // seemed safer but measured worse on both counts: it added a median 4.9 ms and
-  // up to 15 ms of latency, and it collapsed 150 move events into 82 paints, so
-  // nearly half the finger movement was thrown away and the knob visibly trailed.
-  // There is nothing to batch — the handler only writes transform and textContent,
-  // never reads geometry, so it cannot force a synchronous layout.
-  const flush = () => {
-    set(frac);
-    if (onFine) onFine(pendingFine);
-  };
+// Grab the KNOB, and it stays under your thumb.
+//
+// Two earlier models were both wrong. Jump-to-finger threw the value wherever
+// you touched, so small corrections were impossible. Relative-from-anywhere
+// fixed that but broke the physical illusion: the knob drifted away from the
+// finger until you were dragging at the top of the fader while the knob sat at
+// the bottom, which is what "the behaviour is terrible" meant.
+//
+// A real fader has one grab point. Press within the knob (plus generous slop for
+// a thumb) and it tracks 1:1 from wherever you took hold; press the bare track
+// and nothing happens, exactly like the plinth of a 1210.
+const GRAB_SLOP = 28;          // px of extra hit area around the knob
+function bindVFader(track, knob, { get, set, fine = false, onFine = null }) {
+  let dragging = false, grabOffset = 0, virtualY = 0, lastY = 0, box = null, pendingFine = 1;
 
   track.addEventListener('pointerdown', e => {
+    // Geometry read once per drag; reading per move forces a layout a frame.
+    const rect = track.getBoundingClientRect();
+    const kh = knob.offsetHeight;
+    const usable = rect.height - kh;
+    const knobTop = get() * usable;
+    const y = e.clientY - rect.top;
+    if (y < knobTop - GRAB_SLOP || y > knobTop + kh + GRAB_SLOP) return;   // missed it
     dragging = true;
     try { track.setPointerCapture(e.pointerId); } catch {}
-    // Geometry read once per drag; reading it per move forces a layout a frame.
-    const rect = track.getBoundingClientRect();
-    // Fine-drag is measured from WHERE YOU PRESSED, not from the track's centre.
-    // Measuring from the centre meant simply grabbing the fader off-centre — up
-    // to 39px on a 78px-wide track — silently halved sensitivity for the whole
-    // drag, so the knob lagged behind the finger for no visible reason.
-    box = { startX: e.clientX, usable: rect.height - knob.offsetHeight };
-    frac = clamp(get());          // start from where the fader actually is
+    box = { usable, startX: e.clientX };
+    grabOffset = y - knobTop;      // keeps the knob where you took hold of it
+    virtualY = y;
     lastY = e.clientY;
     pendingFine = 1;
+    knob.classList.add('grabbed');
   });
+
   track.addEventListener('pointermove', e => {
     if (!dragging || !box) return;
+    dragProfiler.sample();
     pendingFine = fine ? fineFactor(e.clientX - box.startX) : 1;
-    frac = clamp(frac + ((e.clientY - lastY) / box.usable) * pendingFine);
+    // At full sensitivity virtualY tracks the finger exactly, so the knob sits
+    // under it. Fine mode lets it lag deliberately — standard DAW behaviour.
+    virtualY += (e.clientY - lastY) * pendingFine;
     lastY = e.clientY;
-    flush();
+    const knobTop = Math.max(0, Math.min(box.usable, virtualY - grabOffset));
+    virtualY = knobTop + grabOffset;                 // clamp without wind-up
+    set(box.usable ? knobTop / box.usable : 0);
+    if (onFine) onFine(pendingFine);
   });
+
   const end = () => {
     if (!dragging) return;
     dragging = false; box = null;
-    pendingFine = 1;
-    flush();
+    knob.classList.remove('grabbed');
+    if (onFine) onFine(1);
+    dragProfiler.finish();
   };
   track.addEventListener('pointerup', end);
   track.addEventListener('pointercancel', end);
@@ -939,14 +998,14 @@ $('focusBtn').addEventListener('click', () => {
   setBeatFocus(!beatFocus);
   db.setSetting('beatFocus', beatFocus).catch(() => {});
 });
-$('menuBtn').addEventListener('click', () => openSheet(true));
+$('menuBtn').addEventListener('click', () => { renderProfile(); openSheet(true); });
 $('sheetClose').addEventListener('click', () => openSheet(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(false); });
 
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v16';
+const APP_BUILD = 'bmt-v17';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
