@@ -22,6 +22,20 @@ python3 tools/harness/browser_test.py . tools/harness/tests/fader.html
 # press-to-sound, downbeat alignment, stop/cue timing — the real app, real crate load path
 python3 tools/harness/browser_test.py . tools/harness/tests/latency.html --mount=/crate=/tmp/bmt-crate
 
+# whole rounds through the UI, fader riding, visual aids, stats, demo-crate loader
+python3 tools/harness/browser_test.py . tools/harness/tests/rounds.html --mount=/crate=/tmp/bmt-crate
+python3 tools/harness/browser_test.py . tools/harness/tests/ride.html   --mount=/crate=/tmp/bmt-crate
+python3 tools/harness/browser_test.py . tools/harness/tests/aids.html   --mount=/crate=/tmp/bmt-crate
+python3 tools/harness/browser_test.py . tools/harness/tests/stats.html
+python3 tools/harness/browser_test.py . tools/harness/tests/demo.html   --mount=/crate=/tmp/bmt-crate --mount=/demo=<dir with a test crate.json>
+
+# offline reload + persistence, and screenshots (need Playwright: npm i playwright)
+node tools/harness/pw_offline.mjs /tmp/bmt-crate
+node tools/harness/pw_shot.mjs /tmp/bmt-crate /tmp/shots
+
+# beat-grid analysis for tracks without a Rekordbox grid (writes bpm/anchor/kickIn per file)
+python3 tools/harness/browser_test.py . tools/harness/analyse_crate.html --mount=/crate=<dir of mp3s + files.json> --timeout=600
+
 # does the mix clip? two tracks summed through the shipping chain
 cp tools/harness/tests/audio_chain.html /tmp/bmt-crate/
 python3 tools/harness/browser_test.py /tmp/bmt-crate audio_chain.html
