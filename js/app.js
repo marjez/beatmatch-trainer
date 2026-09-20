@@ -77,6 +77,14 @@ function unlockAudioOnFirstTouch() {
   };
   document.addEventListener('pointerdown', unlock, true);
   document.addEventListener('keydown', unlock, true);
+  // A phone call, Siri or a trip to the switcher leaves the context suspended
+  // or (Safari) interrupted; coming back should not cost the next press a
+  // resume. Also refresh the transport, since sources may have been dropped.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !ctx) return;
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    updateTransport();
+  });
 }
 
 // ---------- Master bus ----------
@@ -757,6 +765,7 @@ function updateTransport() {
 for (const id of DECKS) {
   const play = $('play' + id);
   play.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;                   // a mouse's other buttons are not presses
     e.preventDefault();
     notePress(e);
     decks[id].playing ? stopDeck(id) : playDeck(id);
@@ -766,7 +775,7 @@ for (const id of DECKS) {
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); decks[id].playing ? stopDeck(id) : playDeck(id); }
   });
   const cue = $('cue' + id);
-  cue.addEventListener('pointerdown', e => { e.preventDefault(); notePress(e); cuePress(id); pendingPress = null; });
+  cue.addEventListener('pointerdown', e => { if (e.button !== 0) return; e.preventDefault(); notePress(e); cuePress(id); pendingPress = null; });
   cue.addEventListener('pointerup', () => cueRelease(id));
   cue.addEventListener('pointercancel', () => cueRelease(id));
   cue.addEventListener('pointerleave', () => cueRelease(id));
@@ -1447,7 +1456,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v18';
+const APP_BUILD = 'bmt-v19';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
