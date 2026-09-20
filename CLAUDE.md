@@ -58,7 +58,9 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   Since 2026-09-20 the first CUE at or after the 30 s target wins (snapped to
   the phrase grid): measured on the demo crate, a 9-minute track is often still
   beatless 30 s in, and Rekordbox memory cues / the analyser's "kick in" mark
-  where the beat actually is. Cues before the target are ignored.
+  where the beat actually is. Cues before the target are ignored, and so are
+  cues past 60% of the track or with under 90 s left — Rekordbox exports every
+  position mark, mix-out cues included.
 
 ## Transport: start on the press, at the downbeat (decided 2026-09-20)
 The owner's priority is CDJ-class response on the per-deck Play and Cue: the
@@ -70,7 +72,10 @@ the mechanic. Measured in the harness (tools/harness/tests/latency.html):
   quanta, which is the Web Audio floor. Don't bind transport to click again.
 - The audio graph is built when a deck loads and the context is resumed on the
   first touch anywhere (unlockAudioOnFirstTouch), so the first press of a
-  session pays nothing extra. latencyHint 'interactive'; iOS audioSession type
+  session pays nothing extra. The unlock listens on pointerdown AND pointerup/
+  touchend/click/keydown until the context is 'running': for touch, pointerdown
+  is not an activation-triggering event in the HTML spec, so on iOS the very
+  first press may only sound on its release. Every later press is on the press. latencyHint 'interactive'; iOS audioSession type
   'playback' (otherwise the silent switch mutes Web Audio).
 - What the app can't shorten: AudioContext.baseLatency + outputLatency. The
   Diagnostics panel in the sheet shows both, plus the app's own press→start,

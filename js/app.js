@@ -68,15 +68,20 @@ function ensureCtx() {
 }
 // The first touch anywhere resumes the context, so Play and Cue never pay for
 // resume() on the press that matters. Registered at init, not on the buttons.
+// For touch, pointerdown is NOT an activation-triggering event in the HTML
+// spec (only pointerup / touchend / click are), and iOS has historically only
+// unlocked audio from those. So the unlock listens on all of them and keeps
+// listening until the context reports 'running'. A first Play press while
+// still suspended schedules its source, which then starts on the release that
+// resumes the context; every later press starts on the press.
 function unlockAudioOnFirstTouch() {
+  const EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
   const unlock = () => {
     ensureMaster();
     for (const id of DECKS) ensureChain(id);
-    document.removeEventListener('pointerdown', unlock, true);
-    document.removeEventListener('keydown', unlock, true);
+    if (ctx && ctx.state === 'running') for (const ev of EVENTS) document.removeEventListener(ev, unlock, true);
   };
-  document.addEventListener('pointerdown', unlock, true);
-  document.addEventListener('keydown', unlock, true);
+  for (const ev of EVENTS) document.addEventListener(ev, unlock, true);
   // A phone call, Siri or a trip to the switcher leaves the context suspended
   // or (Safari) interrupted; coming back should not cost the next press a
   // resume. Also refresh the transport, since sources may have been dropped.
@@ -295,10 +300,11 @@ async function loadDemoCrate() {
     const list = manifest.tracks || [];
     for (let i = 0; i < list.length; i++) {
       const t = list[i];
-      const name = t.file.replace(/\.[^.]+$/, '');
-      if (tracks.some(x => x.name === name)) continue;
       btn.textContent = `Downloading ${i + 1} of ${list.length}…`;
       try {
+        if (!t || typeof t.file !== 'string' || typeof t.url !== 'string') throw new Error('bad entry');
+        const name = t.file.replace(/\.[^.]+$/, '');
+        if (tracks.some(x => x.name === name)) continue;
         const res = await fetch(t.url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const blob = new Blob([await res.arrayBuffer()], { type: res.headers.get('content-type') || 'audio/mpeg' });
@@ -308,10 +314,12 @@ async function loadDemoCrate() {
         tracks.push(rec);
         added++;
         renderLibrary();
-        updateButtons();
-        if (!round && canStart()) startRound();
       } catch { failed++; }
     }
+    // Only now: a round decodes a full track (~200 MB of PCM for a 9-minute
+    // MP3), which must not overlap with a download still being copied.
+    updateButtons();
+    if (!round && canStart()) startRound();
   } catch {
     toast('Could not fetch the demo crate list — are you online?');
   }
@@ -446,10 +454,14 @@ function phraseStart(track, duration) {
   // crate) mark where the track is worth dropping in. A 9-minute track is often
   // still beatless 30 s in — measured on the demo crate — so the first cue at
   // or after the target wins, snapped to the phrase grid.
-  const cues = Array.isArray(track.cues) ? track.cues.filter(c => typeof c === 'number' && c >= target - phrase / 2 && c < duration - 20) : [];
+  // Rekordbox exports EVERY position mark, mix-out cues included, so a cue only
+  // counts if it leaves at least a minute and a half to play and sits in the
+  // first 60% of the track.
+  const latest = Math.min(duration - 90, duration * 0.6);
+  const cues = Array.isArray(track.cues) ? track.cues.filter(c => typeof c === 'number' && c >= target - phrase / 2 && c <= latest) : [];
   if (cues.length) {
     const at = snap(Math.min(...cues));
-    if (at >= 0 && at < duration - 20) return at;
+    if (at >= 0 && at <= latest) return at;
   }
   const n = Math.max(0, Math.ceil((target - track.anchor) / phrase));
   const at = track.anchor + n * phrase;
@@ -772,6 +784,7 @@ for (const id of DECKS) {
     pendingPress = null;
   });
   play.addEventListener('keydown', e => {
+    if (e.repeat) return;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); decks[id].playing ? stopDeck(id) : playDeck(id); }
   });
   const cue = $('cue' + id);
@@ -827,7 +840,8 @@ function playheadSeconds(id) {
 function drawWave(id) {
   const cv = $('wave' + id), d = decks[id];
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const cw = cv.clientWidth, ch = cv.clientHeight;
+  const m = wavePx[id];
+  const cw = m ? m.w : 0, ch = m ? m.h : 0;
   if (!cw || !ch) return;
   if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
   const g = cv.getContext('2d');
@@ -962,12 +976,17 @@ function setPitchRange(range) {
 // reading clientHeight/offsetHeight mid-drag forces a synchronous layout on
 // every frame, which is most of what "lags terribly" was.
 const faderPx = { A: null, B: null, xf: null };
+const wavePx = { A: null, B: null };
 function measureFaders() {
   for (const id of DECKS) {
     faderPx[id] = {
       pitchH: $('faderTrack' + id).clientHeight,
       pitchKnob: $('faderKnob' + id).offsetHeight,
     };
+    // The waveform canvas is measured here too, never in the frame loop: a
+    // clientWidth read per frame would force layout during every fader drag.
+    const cv = $('wave' + id);
+    wavePx[id] = { w: cv.clientWidth, h: cv.clientHeight };
   }
   faderPx.xf = { w: $('xfTrack').clientWidth, knob: $('xfKnob').offsetWidth };
 }
@@ -1181,8 +1200,10 @@ for (const id of DECKS) {
 }
 
 // ---------- Reveal ----------
+let revealing = false;
 revealBtn.addEventListener('click', async () => {
-  if (!round) return;
+  if (!round || revealing) return;
+  revealing = true;                 // the IDB write below is awaited; a double tap must not save twice
   stopDeck('A'); stopDeck('B');
   const err = currentErrorPct();
   const absErr = Math.abs(err);
@@ -1232,6 +1253,7 @@ revealBtn.addEventListener('click', async () => {
   row.style.animation = driftDur ? `strobeDrift ${driftDur}s linear infinite ${err > 0 ? '' : 'reverse'}` : 'none';
   $('strobeCaption').textContent = absErr <= 0.1 ? 'Strobe dots frozen — beat locked' : `Dots drifting ${dir} at your error rate`;
   overlay.classList.add('show');
+  revealing = false;
   renderHistory();
   renderStats();
 });
@@ -1512,7 +1534,7 @@ async function init() {
   // until layout settles — and changes on rotate or when the URL bar hides.
   if (window.ResizeObserver) {
     const ro = new ResizeObserver(() => renderAllFaders());
-    for (const id of DECKS) ro.observe($('faderTrack' + id));
+    for (const id of DECKS) { ro.observe($('faderTrack' + id)); ro.observe($('wave' + id)); }
     ro.observe($('xfTrack'));
   }
   try {
