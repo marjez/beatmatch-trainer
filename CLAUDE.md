@@ -49,19 +49,32 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
   which the file picker accepts alongside audio. No grid → old 25%-in fallback.
 
+## Transport: start on the press, at the downbeat (decided 2026-09-20)
+The owner's priority is CDJ-class response on the per-deck Play and Cue: the
+finger lands, the downbeat leaves the speaker. Decks are started one at a time,
+by ear, as on CDJs/1210s — "Drop both" is a fallback in the settings sheet, not
+the mechanic. Measured in the harness (tools/harness/tests/latency.html):
+- Play was bound to `click`, which fires on RELEASE: press→sound was 108 ms,
+  90 ms of it the tap itself. It's on `pointerdown` now: 6 ms, two render
+  quanta, which is the Web Audio floor. Don't bind transport to click again.
+- The audio graph is built when a deck loads and the context is resumed on the
+  first touch anywhere (unlockAudioOnFirstTouch), so the first press of a
+  session pays nothing extra. latencyHint 'interactive'; iOS audioSession type
+  'playback' (otherwise the silent switch mutes Web Audio).
+- What the app can't shorten: AudioContext.baseLatency + outputLatency. The
+  Diagnostics panel in the sheet shows both, plus the app's own press→start,
+  so the phone's floor is readable on the device.
+
 ## Why it sounds right or wrong (researched + measured, Sept 2026)
 The app was "harder to hear the match on" than Beatmatch PRO for three concrete
 reasons, all fixed. Don't undo any of them.
 
-1. PHASE LOCK IS THE WHOLE MECHANIC. A tempo error is only audible as a flam,
-   and two transients stop reading as one drum once they're ~20-50 ms apart.
-   Starting decks with two separate play taps leaves them up to half a beat
-   (240 ms at 125 BPM) out — far outside that window, so you hear two unrelated
-   rhythms and the tempo error is effectively inaudible. Nudge can't rescue it:
-   closing 240 ms at 2% takes 12 seconds of holding. dropBoth() schedules both
-   sources on one audio-clock tick from offset 0, and since both windows begin on
-   a downbeat that puts them in unison. Individual play buttons remain for
-   listening to one deck alone.
+1. PHASE MATTERS. A tempo error is only audible as a flam, and two transients
+   stop reading as one drum once they're ~20-50 ms apart. Both windows begin on
+   a downbeat (offset 0 IS beat 1, verified to the sample), so a deck dropped
+   on the other's downbeat starts in unison and any drift you hear is the
+   tempo error. dropBoth() (settings sheet) starts both on one audio-clock
+   tick as a fallback.
 2. THE MIX WAS CLIPPING. Two modern masters at deck gain summed to peak 1.64 and
    hard-clipped 0.64-1.3% of samples at the destination — and clipping lands on
    the kick transients, flattening the very attacks you listen for. The master
@@ -145,6 +158,7 @@ What works, and why each part is load-bearing:
 - Cue behaviour is described under "Cue behaviour" above. Playhead position is
   tracked in decks[id].offset via markPosition() — always mark BEFORE changing
   rate or the position drifts.
+- Transport is on pointerdown (see "Transport" above). Cue: pointerdown/up.
 - Two-track pairing is restricted to tracks whose r0 sits inside the fader range
   (|bpmA/bpmB − 1| ≤ pitchRange%), so every pair is one you could actually mix on
   the 1210s. Without it a mixed house/hip-hop crate deals 126-vs-90 pairs and
@@ -174,9 +188,11 @@ What works, and why each part is load-bearing:
 - BPM detection uses vendored web-audio-beat-detector.
 
 ## Open threads (as of 2026-09-20)
-- UNVERIFIED: v15's phase-locked "Drop both" + Beat focus are the fix for "hard
-  to hear the match", but the owner hasn't tried them on the phone yet. Don't
-  build on top of that mechanic until it's confirmed working.
+- Overnight branch `overnight-2026-09-20` (Linux box): latency-first transport,
+  Drop Both moved to the sheet, harness extended. Owner merges after the phone
+  pass; nothing is pushed to main from the branch.
+- UNVERIFIED ON THE PHONE: the pointerdown transport and the audio-session
+  change. Read the Diagnostics panel after a few presses for the device floor.
 - 6 of 41 crate tracks have no beat grid, so they still start off-phrase and gain
   nothing from the phase lock: 02 Blaze - Most Precious Love 1, michael_moog -
   that_sound, CHRIS STASSY x2, EserEx - Oversimplify, G-TONIN - After All. They
@@ -209,8 +225,9 @@ What works, and why each part is load-bearing:
 - tools/harness/ is the measurement kit that found every real bug here. Run
   tools/harness/check.sh to parse-check (node on Linux, JavaScriptCore on the
   Mac) and tools/harness/browser_test.py to drive the real app in headless
-  Chrome. make_test_audio.py synthesises tracks with a known BPM and a downbeat
-  at t=0, so no test depends on the owner's crate.
+  Chrome. make_test_audio.py --crate synthesises a whole gridded crate with
+  known BPMs and downbeats, so no test depends on the owner's crate. The app
+  exposes read-only handles on window.__bmt for the harness only.
 - MAC-ONLY, and can't move: the crate itself lives in iCloud Drive and
   rekordbox.xml is exported there, so crate_sync.py / rekordbox_export.py only
   make sense on the Mac. They also shell out to afconvert, which is macOS-only —

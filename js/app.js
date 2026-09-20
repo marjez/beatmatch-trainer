@@ -536,6 +536,34 @@ function applyRate(id) {
   if (d.source) d.source.playbackRate.value = d.rate;
 }
 
+// Press -> start timing for the diagnostics panel: the time from the pointer
+// event's timestamp to the audio engine being handed the source. What the
+// engine and the hardware add on top is reported next to it from the context.
+const audioProfile = { pressToStartMs: null, samples: [] };
+let pendingPress = null;                  // event timeStamp of the press in flight
+function notePress(e) { pendingPress = e && typeof e.timeStamp === 'number' ? e.timeStamp : performance.now(); }
+function noteStarted() {
+  if (pendingPress === null) return;
+  const ms = performance.now() - pendingPress;
+  pendingPress = null;
+  audioProfile.samples.push(ms);
+  if (audioProfile.samples.length > 20) audioProfile.samples.shift();
+  audioProfile.pressToStartMs = ms;
+}
+function renderAudioProfile() {
+  const el = $('audioProfile');
+  if (!el) return;
+  if (!ctx) { el.textContent = 'Press Play or Cue, then reopen this menu.'; return; }
+  const base = ctx.baseLatency != null ? `${(ctx.baseLatency * 1000).toFixed(1)} ms` : '—';
+  const out = ctx.outputLatency != null && ctx.outputLatency > 0 ? `${(ctx.outputLatency * 1000).toFixed(1)} ms` : '—';
+  const s = audioProfile.samples;
+  const worst = s.length ? Math.max(...s) : null;
+  el.textContent = `${(ctx.sampleRate / 1000).toFixed(1)} kHz · ${ctx.state}`
+    + ` · press → start ${audioProfile.pressToStartMs !== null ? audioProfile.pressToStartMs.toFixed(1) + ' ms' : '—'}`
+    + (worst !== null && s.length > 1 ? ` (worst ${worst.toFixed(1)})` : '')
+    + ` · engine base ${base} · output ${out}`;
+}
+
 function startSource(id, from, when) {
   const c = ensureCtx();
   const d = ensureChain(id);
@@ -550,6 +578,7 @@ function startSource(id, from, when) {
   const at = Math.max(0, Math.min(from, valid - 0.05));
   const startAt = when || 0;
   src.start(startAt, at, Math.max(0.05, valid - at));   // don't play the zeroed tail
+  noteStarted();
   d.source = src;
   d.offset = at;
   d.mark = Math.max(startAt, c.currentTime);
@@ -566,19 +595,14 @@ function stopSource(id) {
   d.playing = false;
 }
 
-// Drop both decks phase-locked.
-//
-// This is the whole point of the app working or not. A tempo error is only
-// audible as a flam, and two transients stop reading as a flam once they are
-// more than ~20-50 ms apart. Starting the decks by tapping two play buttons
-// leaves them up to half a beat (~240 ms at 125 BPM) out, which is far outside
-// that window — so you hear two unrelated rhythms and the tempo error is
-// effectively inaudible. Nudge can't rescue it either: closing a 240 ms gap at
-// 2% takes twelve seconds of holding.
+// Drop both decks phase-locked — a FALLBACK, kept in the settings sheet.
 //
 // Both windows begin exactly on a downbeat, so starting them on the same audio
-// clock tick puts the beats in unison. From there any drift you hear IS your
-// tempo error, which is the signal you're training on.
+// clock tick puts the beats in unison and any drift you then hear is the tempo
+// error. It is not how decks are started in practice: on CDJs or 1210s you
+// start one, then drop the other on its downbeat by ear — which is what the
+// per-deck Play and Cue are for, and why their press-to-sound is what's
+// optimised (measured 6 ms, two render quanta, on the press itself).
 function dropBoth() {
   if (!round) return;
   const c = ensureCtx();
@@ -645,13 +669,15 @@ for (const id of DECKS) {
   const play = $('play' + id);
   play.addEventListener('pointerdown', e => {
     e.preventDefault();
+    notePress(e);
     decks[id].playing ? stopDeck(id) : playDeck(id);
+    pendingPress = null;
   });
   play.addEventListener('keydown', e => {
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); decks[id].playing ? stopDeck(id) : playDeck(id); }
   });
   const cue = $('cue' + id);
-  cue.addEventListener('pointerdown', e => { e.preventDefault(); cuePress(id); });
+  cue.addEventListener('pointerdown', e => { e.preventDefault(); notePress(e); cuePress(id); pendingPress = null; });
   cue.addEventListener('pointerup', () => cueRelease(id));
   cue.addEventListener('pointercancel', () => cueRelease(id));
   cue.addEventListener('pointerleave', () => cueRelease(id));
@@ -1045,12 +1071,12 @@ $('detectBtn').addEventListener('click', async () => {
     ? `Detected BPM for ${before - after} track${before - after > 1 ? 's' : ''}.`
     : 'Could not detect a tempo — type it in instead.');
 });
-$('dropBtn').addEventListener('click', dropBoth);
+$('dropBtn').addEventListener('click', () => { if (!round) return; openSheet(false); dropBoth(); });
 $('focusBtn').addEventListener('click', () => {
   setBeatFocus(!beatFocus);
   db.setSetting('beatFocus', beatFocus).catch(() => {});
 });
-$('menuBtn').addEventListener('click', () => { renderProfile(); openSheet(true); });
+$('menuBtn').addEventListener('click', () => { renderProfile(); renderAudioProfile(); openSheet(true); });
 $('sheetClose').addEventListener('click', () => openSheet(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(false); });
 
