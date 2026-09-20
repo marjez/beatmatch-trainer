@@ -1,0 +1,76 @@
+<!doctype html><meta charset=utf-8><title>analyse</title><pre id=o>running…</pre>
+<script type=module>
+// Beat-grid analysis for tracks that have no Rekordbox grid: BPM from the
+// app's own vendored detector, then refined by fitting a grid to a low-band
+// onset envelope over two minutes, then the beat phase and a best-effort
+// downbeat. Serve the project root with the tracks mounted at /crate/ and
+// files.json listing them; posts {file, bpm, anchor, confidence} per track.
+import { guess } from '/js/vendor/web-audio-beat-detector.mjs';
+const post = o => fetch('/result', { method: 'POST', body: JSON.stringify(o, null, 1) });
+const log = s => { document.getElementById('o').textContent += '\n' + s; };
+try {
+  const files = await (await fetch('/crate/files.json')).json();
+  const ctx = new OfflineAudioContext(1, 1, 44100);
+  const out = [];
+  for (const f of files) {
+    const ab = await (await fetch('/crate/' + encodeURIComponent(f))).arrayBuffer();
+    const buf = await new AudioContext().decodeAudioData(ab);
+    const sr = buf.sampleRate, dur = buf.duration;
+    const offset = dur > 90 ? Math.min(30, dur * 0.25) : 0;
+    let bpm0 = null;
+    try { const r = await guess(buf, offset, Math.min(60, dur - offset), { minTempo: 80, maxTempo: 159 }); bpm0 = typeof r === 'number' ? r : (r?.bpm ?? r?.tempo); } catch {}
+    // Low-band onset envelope at 1 ms resolution over the analysed span.
+    const span = Math.min(150, dur - 5), n = Math.floor(span * sr);
+    const oc = new OfflineAudioContext(1, n, sr);
+    const src = oc.createBufferSource(); src.buffer = buf;
+    const lp = oc.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150; lp.Q.value = 0.9;
+    src.connect(lp); lp.connect(oc.destination); src.start(0);
+    const low = (await oc.startRendering()).getChannelData(0);
+    const frame = Math.round(sr / 1000), frames = Math.floor(n / frame);
+    const frameS = frame / sr;               // NOT 1 ms: 44/44100 s; converting back with 1 ms biased BPM by 0.23%
+    const env = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) { let e = 0; for (let k = 0; k < frame; k++) { const v = low[i * frame + k]; e += v * v; } env[i] = Math.sqrt(e / frame); }
+    const onset = new Float32Array(frames);
+    for (let i = 1; i < frames; i++) onset[i] = Math.max(0, env[i] - env[i - 1]);
+    // Grid fit: period in ms around the detector's guess, ±1.5%, best phase per period.
+    const fit = (bpmGuess) => {
+      let best = { score: -1 };
+      const p0 = 60 / bpmGuess / frameS;   // beat period in frames
+      for (let p = p0 * 0.985; p <= p0 * 1.015; p += p0 * 0.00005) {
+        const beats = Math.floor((frames - 1) / p);
+        for (let ph = 0; ph < p; ph += 1) {
+          let s = 0;
+          for (let k = 0; k < beats; k++) { const i = Math.round(ph + k * p); s += onset[i] + 0.5 * (onset[i - 1] || 0) + 0.5 * (onset[i + 1] || 0); }
+          if (s > best.score) best = { score: s, p, ph, beats };
+        }
+      }
+      return best;
+    };
+    const cands = bpm0 ? [bpm0] : [120, 124, 128, 132, 136];
+    let best = { score: -1 };
+    for (const c of cands) { const b = fit(c); if (b.score > best.score) best = b; }
+    // Confidence: best phase score vs the mean over all phases at that period.
+    let mean = 0; { const p = best.p, beats = best.beats; let cnt = 0; for (let ph = 0; ph < p; ph += 4) { let s = 0; for (let k = 0; k < beats; k++) { const i = Math.round(ph + k * p); s += onset[i]; } mean += s; cnt++; } mean /= cnt; }
+    const bpm = +(60 / (best.p * frameS)).toFixed(2);
+    // Downbeat: of the four beat phases, the one with the strongest average onset.
+    let dbBest = { s: -1, k: 0 };
+    for (let k = 0; k < 4; k++) { let s = 0, c = 0; for (let b = k; b < best.beats; b += 4) { s += onset[Math.round(best.ph + b * best.p)]; c++; } if (c && s / c > dbBest.s) dbBest = { s: s / c, k }; }
+    const anchor = +((best.ph + dbBest.k * best.p) * frameS).toFixed(4);
+    // Where the beat is actually established: the first 4-bar phrase (from the
+    // downbeat) in which at least 12 of 16 grid beats carry a real onset. The
+    // app can start there instead of 30 s into a beatless intro.
+    let kickIn = null;
+    {
+      const strong = []; for (let b = dbBest.k; b < best.beats; b++) strong.push(onset[Math.round(best.ph + b * best.p)]);
+      const sorted = [...strong].sort((a, b) => a - b), ref = sorted[Math.floor(sorted.length * 0.5)] || 0;
+      for (let ph = 0; ph + 16 <= strong.length; ph += 16) {
+        let hits = 0; for (let b = 0; b < 16; b++) if (strong[ph + b] > ref * 0.4) hits++;
+        if (hits >= 12) { kickIn = +((best.ph + (dbBest.k + ph) * best.p) * frameS).toFixed(3); break; }
+      }
+    }
+    const rec = { file: f, duration: +dur.toFixed(1), bpmDetector: bpm0 && +bpm0.toFixed(2), bpm, anchor, kickIn, confidence: +(best.score / (mean || 1)).toFixed(2) };
+    out.push(rec); log(JSON.stringify(rec));
+  }
+  await post(out);
+} catch (e) { await post({ fatal: String(e && e.stack || e) }); }
+</script>

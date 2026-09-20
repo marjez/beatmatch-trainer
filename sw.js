@@ -13,6 +13,7 @@ const SHELL = [
   './js/db.js',
   './js/vendor/web-audio-beat-detector.mjs',
   './manifest.webmanifest',
+  './demo/crate.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
@@ -43,6 +44,10 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
+  // Anything else cross-origin (the demo crate's audio on archive.org) goes
+  // straight to the network: it lands in IndexedDB as a track, so a copy in the
+  // cache would only double the storage.
+  if (url.origin !== self.location.origin) return;
   // Shell: network-first, cache fallback. Cache-first left users stranded on a
   // stale build — an iOS home-screen app resumed from the switcher never
   // navigates, so a new worker never installs and the old HTML/JS lives on.

@@ -55,6 +55,10 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 - Playback starts at phraseStart(): a whole number of 4-bar phrases from the
   Rekordbox downbeat anchor, past the intro. The anchor comes from crate.json,
   which the file picker accepts alongside audio. No grid → old 25%-in fallback.
+  Since 2026-09-20 the first CUE at or after the 30 s target wins (snapped to
+  the phrase grid): measured on the demo crate, a 9-minute track is often still
+  beatless 30 s in, and Rekordbox memory cues / the analyser's "kick in" mark
+  where the beat actually is. Cues before the target are ignored.
 
 ## Transport: start on the press, at the downbeat (decided 2026-09-20)
 The owner's priority is CDJ-class response on the per-deck Play and Cue: the
@@ -200,6 +204,13 @@ What works, and why each part is load-bearing:
   rolling median of 10, difficulty filter, tap-for-pair tooltip, table view.
   Plain SVG, no library; one series so no legend; dot colour = reveal band.
   Rounds without errBpm (pre-BPM-metric records) are skipped.
+- Demo crate (2026-09-20): demo/crate.json lists 16 CC BY tracks on archive.org
+  (CORS open) with BPM, anchor, kick-in cue and credit; loadDemoCrate() fetches
+  them one at a time into IndexedDB with `credit` on the record, and the crate
+  panel shows credits (CC BY requires attribution + licence link). The service
+  worker does NOT runtime-cache cross-origin requests, so the audio isn't stored
+  twice. Analysed with tools/harness/analyse_crate.html; downbeat-within-bar is
+  best-effort, beat phase and BPM are exact (integer tempos, DAW-produced).
 - Crossfader (2026-09-20) replaced the two channel faders: equal-power curve,
   centre = both decks at cos(π/4), position persisted as setting 'xfade'. The
   pitch faders got the width back. bindFader takes axis 'x'|'y'; the grab-the-

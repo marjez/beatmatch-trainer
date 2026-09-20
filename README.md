@@ -34,6 +34,16 @@ Beatmatch PRO built around your own crate.
   the choice persists between sessions.
 - Your crate and round history are stored on-device (IndexedDB) and persist between sessions.
 
+## Demo crate
+
+No music of your own to hand? **Crate & settings → Load the demo crate** fetches
+sixteen Creative Commons BY house, tech-house and minimal tracks from netlabels
+on the Internet Archive (~250 MB, downloaded once, stored on the device like
+any other track). Tempos, beat grids and a "kick in" cue were analysed with
+`tools/harness/analyse_crate.html`; credits with licence links are shown under
+the crate. Nothing is bundled in the app itself — `demo/crate.json` is a list of
+URLs and metadata.
+
 ## Deploy to GitHub Pages
 
 1. Create a new GitHub repo (e.g. `beatmatch-trainer`) and push this folder.
@@ -96,6 +106,8 @@ manifest.webmanifest  PWA install metadata
 tools/rekordbox_export.py   crate export from Rekordbox XML (+ crate.json beat grid)
 tools/crate_sync.py         fold newly dropped tracks into an existing crate
 tools/crate_bpm_stats.py    print a playlist's BPM spread (numbers only)
+tools/harness/              measurement kit: synthetic crate, browser tests, grid analyser
+demo/crate.json             the demo crate manifest (URLs + BPM + grid + credits)
 ```
 
 No build step, no dependencies, no framework. Vanilla ES modules.

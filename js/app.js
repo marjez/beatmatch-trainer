@@ -270,7 +270,71 @@ fileInput.addEventListener('change', async (e) => {
   if (!round && canStart()) startRound();
 });
 
+// ---------- Demo crate ----------
+// demo/crate.json lists Creative Commons BY tracks on archive.org with their
+// analysed BPM and beat grid. Nothing is bundled: each file is fetched once on
+// request and stored like any other track, with its credit kept on the record
+// so attribution can be shown. Fetched one at a time so a phone never holds
+// more than one download in memory on top of the crate.
+let demoLoading = false;
+async function loadDemoCrate() {
+  if (demoLoading) return;
+  const btn = $('demoBtn');
+  demoLoading = true; btn.disabled = true;
+  let added = 0, failed = 0;
+  try {
+    const manifest = await (await fetch('demo/crate.json', { cache: 'no-cache' })).json();
+    const list = manifest.tracks || [];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      const name = t.file.replace(/\.[^.]+$/, '');
+      if (tracks.some(x => x.name === name)) continue;
+      btn.textContent = `Downloading ${i + 1} of ${list.length}…`;
+      try {
+        const res = await fetch(t.url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const blob = new Blob([await res.arrayBuffer()], { type: res.headers.get('content-type') || 'audio/mpeg' });
+        const rec = { name, bpm: t.bpm, bpmSource: 'name', blob, anchor: typeof t.anchor === 'number' ? t.anchor : null, cues: t.cues || null,
+                      credit: { artist: t.artist, title: t.title, release: t.release, label: t.label, license: t.license, licenseUrl: t.licenseUrl, page: t.page } };
+        rec.id = await db.addTrack(rec);
+        tracks.push(rec);
+        added++;
+        renderLibrary();
+        updateButtons();
+        if (!round && canStart()) startRound();
+      } catch { failed++; }
+    }
+  } catch {
+    toast('Could not fetch the demo crate list — are you online?');
+  }
+  demoLoading = false; btn.disabled = false;
+  btn.textContent = 'Load the demo crate';
+  if (added) toast(`${added} demo track${added > 1 ? 's' : ''} added${failed ? `, ${failed} failed` : ''}.`);
+  else if (failed) toast(`Could not download the demo tracks (${failed} failed) — check the connection and try again.`);
+  else toast('The demo crate is already loaded.');
+  renderLibrary();
+  updateButtons();
+}
+$('demoBtn').addEventListener('click', loadDemoCrate);
+
+function renderCredits() {
+  const box = $('creditsBox'), list = $('creditsList');
+  const credited = tracks.filter(t => t.credit);
+  box.hidden = credited.length === 0;
+  list.innerHTML = '';
+  for (const t of credited) {
+    const c = t.credit;
+    const row = document.createElement('div');
+    row.className = 'credit-row';
+    const a = document.createElement('a'); a.href = c.page || '#'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = c.release || 'source';
+    const l = document.createElement('a'); l.href = c.licenseUrl || '#'; l.target = '_blank'; l.rel = 'noopener'; l.textContent = c.license || 'CC';
+    row.append(Object.assign(document.createElement('b'), { textContent: `${c.artist} – ${c.title}` }), ' · ', a, c.label ? ` (${c.label})` : '', ' · ', l);
+    list.appendChild(row);
+  }
+}
+
 function renderLibrary() {
+  renderCredits();
   // Detection is opt-in: it full-decodes a track (~144 MB) to analyse it, so it
   // must never run unprompted at startup on a phone.
   const untagged = tracks.filter(t => !t.bpm).length;
@@ -369,6 +433,16 @@ function phraseStart(track, duration) {
   const target = duration > 90 ? Math.min(30, duration * 0.25) : 0;
   if (typeof track?.anchor !== 'number' || !track?.bpm) return target;
   const phrase = BEATS_PER_PHRASE * (60 / track.bpm);
+  const snap = t => track.anchor + Math.round((t - track.anchor) / phrase) * phrase;
+  // Cue points (Rekordbox memory cues, or the analyser's "kick in" for the demo
+  // crate) mark where the track is worth dropping in. A 9-minute track is often
+  // still beatless 30 s in — measured on the demo crate — so the first cue at
+  // or after the target wins, snapped to the phrase grid.
+  const cues = Array.isArray(track.cues) ? track.cues.filter(c => typeof c === 'number' && c >= target - phrase / 2 && c < duration - 20) : [];
+  if (cues.length) {
+    const at = snap(Math.min(...cues));
+    if (at >= 0 && at < duration - 20) return at;
+  }
   const n = Math.max(0, Math.ceil((target - track.anchor) / phrase));
   const at = track.anchor + n * phrase;
   // Never drop so late there's nothing left to listen to.

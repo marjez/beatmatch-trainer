@@ -116,6 +116,13 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 }
 .track-del:active { color: var(--strobe); border-color: var(--strobe); }
 
+.credits { margin-top: 10px; font-size: 11px; color: var(--alloy-dim); }
+.credits[hidden] { display: none; }
+.credits summary { cursor: pointer; font-family: var(--font-display); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--alloy-dim); }
+.credits a { color: var(--amber); text-decoration: none; }
+.credit-row { padding: 5px 0; border-bottom: 1px solid rgba(49,53,63,0.5); line-height: 1.45; }
+.credit-row b { color: var(--alloy); font-weight: 600; }
+
 /* flex-basis 150px + wrap: the two segments sit side by side when there's room
    and stack on a phone instead of overflowing the panel. */
 .settings-row { display: flex; gap: 8px; flex-wrap: wrap; }

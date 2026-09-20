@@ -37,10 +37,10 @@ function tx(db, store, mode, fn) {
   });
 }
 
-export async function addTrack({ name, bpm, bpmSource, blob, anchor = null, cues = null }) {
+export async function addTrack({ name, bpm, bpmSource, blob, anchor = null, cues = null, credit = null }) {
   const db = await openDB();
   return tx(db, 'tracks', 'readwrite', s =>
-    s.add({ name, bpm, bpmSource, blob, anchor, cues, added: Date.now() }));
+    s.add({ name, bpm, bpmSource, blob, anchor, cues, credit, added: Date.now() }));
 }
 
 export async function getAllTracks() {
