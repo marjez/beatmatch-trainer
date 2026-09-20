@@ -6,8 +6,14 @@ Beatmatch PRO built around your own crate.
 
 ## How it works
 
-- **Deck A** plays at fixed tempo. **Deck B** plays with a hidden random tempo offset.
-- Match B to A by ear using the ±8% pitch fader (SL-1210 range) and hold-to-nudge buttons.
+- Both decks are live, with a hidden random tempo offset on deck 2. Match them by
+  ear using the ±8% pitch faders (SL-1210 range) and hold-to-nudge buttons.
+- **Drop both** starts the decks phase-locked on a single audio-clock tick. This is
+  the core of it: a tempo error is only audible as a flam, and two transients stop
+  reading as one drum beyond ~20 ms apart — so starting them separately puts you
+  outside the window where the error can be heard at all.
+- **Beat focus** low-passes the mix to 220 Hz, leaving just the kick and low end,
+  the way you'd use the EQ kills on a mixer to check a match.
 - **Reveal score** shows how many BPM you were out, plus a strobe-dot row that drifts
   at your error rate — frozen dots means you locked it.
 - Every round pairs two different tracks, and only ever pairs tracks close enough
@@ -61,7 +67,7 @@ nearest whole number can leave the mix drifting by up to half a beat per minute
 while the app still calls it perfect.
 
 Untagged tracks fall back to in-app detection (web-audio-beat-detector,
-constrained to 85–175 BPM). It's good but not exact — prefer the filename route.
+constrained to 80–159 BPM). It's good but not exact — prefer the filename route.
 
 ## Local development
 
