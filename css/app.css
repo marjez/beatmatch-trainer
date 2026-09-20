@@ -192,6 +192,29 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
   background: var(--alloy); border-radius: 1px;
 }
 
+/* Visual aids (Beatmatch PRO parity), only shown when the setting is on.
+   The waveform sits above the fader and takes fixed height; the meter is a
+   thin bar beside the fader, filled by transform so it never runs layout. */
+.wave { width: 100%; height: 46px; flex-shrink: 0; border-radius: 6px; background: var(--plinth); border: 1px solid var(--edge); display: block; }
+.wave[hidden], .meter[hidden] { display: none; }
+.meter {
+  width: 10px; flex-shrink: 0; align-self: stretch; position: relative; overflow: hidden;
+  background: var(--plinth); border: 1px solid var(--edge); border-radius: 4px; margin-bottom: 31px;
+}
+/* The gradient stays put (red always at the top); a mask scaled from the top
+   hides the part above the current level. */
+.meter-fill {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, var(--lock) 0%, var(--lock) 60%, var(--amber) 80%, var(--strobe) 100%);
+}
+.meter-mask {
+  position: absolute; inset: 0; background: var(--plinth);
+  transform: scaleY(1); transform-origin: top; will-change: transform;
+}
+.reveal-parity { font-family: var(--font-mono); font-size: 14px; color: var(--amber); margin-top: 12px; letter-spacing: 0.04em; }
+.reveal-parity[hidden] { display: none; }
+.reveal-parity .stars { color: var(--amber); letter-spacing: 0.15em; }
+
 /* Crossfader: horizontal, grabbed by its knob like the pitch faders. The knob
    is a vertical bar with a centre line, and a tick marks the centre position. */
 .xfader { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 2px; }

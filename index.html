@@ -27,7 +27,10 @@
   <div class="decks">
 
     <section class="channel" data-deck="A">
+      <!-- Visual aids (Beatmatch PRO-style), hidden unless the setting is on -->
+      <canvas class="wave" id="waveA" hidden></canvas>
       <div class="ch-faders">
+        <div class="meter" id="meterA" hidden><div class="meter-fill"></div><div class="meter-mask" id="meterMaskA"></div></div>
         <div class="fader-unit">
           <div class="fader-track pitch-track" id="faderTrackA">
             <div class="fader-scale" id="faderScaleA"></div>
@@ -51,7 +54,10 @@
     </section>
 
     <section class="channel" data-deck="B">
+      <!-- Visual aids (Beatmatch PRO-style), hidden unless the setting is on -->
+      <canvas class="wave" id="waveB" hidden></canvas>
       <div class="ch-faders">
+        <div class="meter" id="meterB" hidden><div class="meter-fill"></div><div class="meter-mask" id="meterMaskB"></div></div>
         <div class="fader-unit">
           <div class="fader-track pitch-track" id="faderTrackB">
             <div class="fader-scale" id="faderScaleB"></div>
@@ -127,6 +133,13 @@
         </div>
       </div>
       <div class="settings-row" style="margin-top:8px;">
+        <div class="seg" id="aidsSeg">
+          <button data-aids="off" class="on">Ears only</button>
+          <button data-aids="on">Visual aids</button>
+        </div>
+      </div>
+      <div class="setting-hint">Visual aids adds what Beatmatch PRO puts on screen: level meters, scrolling waveforms, each track's BPM, and a score out of 100 with stars on the reveal. Ears only is the honest default — with meters and waveforms you can line the kicks up by eye.</div>
+      <div class="settings-row" style="margin-top:8px;">
         <div class="seg" id="splitSeg">
           <button data-split="off" class="on">Both centred</button>
           <button data-split="on">Split L / R</button>
@@ -169,6 +182,7 @@
       <div class="strobe-row" id="strobeRow"></div>
     </div>
     <div class="strobe-caption" id="strobeCaption"></div>
+    <div class="reveal-parity" id="revealParity" hidden></div>
     <div class="reveal-detail" id="revealDetail"></div>
     <div class="actions" style="margin-top:22px;">
       <button class="btn-secondary" id="retryBtn">Same pair again</button>

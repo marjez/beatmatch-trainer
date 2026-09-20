@@ -15,6 +15,7 @@ let round = null;           // {aIdx, bIdx, hidden, r0}
 let split = false;          // headphone split: A hard left, B hard right
 let beatFocus = false;      // low-pass the master so only the kicks remain
 let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
+let aids = false;           // Beatmatch PRO-style visual aids: meters, waveforms, BPMs, %/stars
 // Both decks are fully live: each has its own pitch fader, nudge and level, and
 // the score is the tempo difference BETWEEN them. offset/mark track the playhead
 // so Cue can return to the start point and Play can resume where it stopped.
@@ -464,6 +465,7 @@ function ensureChain(id) {
     applySplit();
   }
   d.gain.gain.value = deckGain(id);
+  if (aids && !d.analyser) attachAnalyser(id);
   return d;
 }
 function applySplit() {
@@ -506,8 +508,10 @@ function loadDeck(id, track) {
       if (avail < win.length) out.fill(0, avail);       // silence the unused tail
       d.buffer = win;                                   // full buffer drops here
       d.validSeconds = avail / c.sampleRate;
+      d.peaks = wavePeaks(out, avail, c.sampleRate);    // for the visual-aids waveform
       d.ready = true;
       updateTransport();
+      if (aids) drawWave(id);
     } catch {
       d.ready = false;
       toast(`Deck ${id === 'A' ? 1 : 2}: could not read this track.`);
@@ -662,6 +666,7 @@ function cueRelease(id) {
 }
 
 function updateTransport() {
+  kickAids();
   for (const id of DECKS) {
     const d = decks[id];
     const btn = $('play' + id);
@@ -691,6 +696,133 @@ for (const id of DECKS) {
   cue.addEventListener('pointerup', () => cueRelease(id));
   cue.addEventListener('pointercancel', () => cueRelease(id));
   cue.addEventListener('pointerleave', () => cueRelease(id));
+}
+
+// ---------- Visual aids (Beatmatch PRO parity) ----------
+// Off by default and off means OFF: no analyser in the graph, no animation
+// loop, the elements hidden. On, each channel gets a level meter, a scrolling
+// waveform around the playhead and its track's tagged BPM, and the reveal adds
+// a score out of 100 with stars. Beatmatch PRO shows meters, waveforms and
+// track BPM data; its exact score formula isn't public, so the percentage here
+// is an approximation: 100 minus 20 per BPM of error, five stars under 0.5.
+const WAVE_BIN_S = 0.005;          // peak per 5 ms
+const WAVE_SPAN_S = 4;             // seconds of waveform visible
+function wavePeaks(data, n, sr) {
+  const bin = Math.max(1, Math.round(WAVE_BIN_S * sr));
+  const out = new Float32Array(Math.ceil(n / bin));
+  for (let b = 0; b < out.length; b++) {
+    let p = 0;
+    const end = Math.min(n, (b + 1) * bin);
+    for (let i = b * bin; i < end; i++) { const a = data[i] < 0 ? -data[i] : data[i]; if (a > p) p = a; }
+    out[b] = p;
+  }
+  return out;
+}
+function attachAnalyser(id) {
+  const d = decks[id];
+  if (d.analyser || !d.gain) return;
+  d.analyser = ctx.createAnalyser();
+  d.analyser.fftSize = 512;
+  d.analyser.smoothingTimeConstant = 0;
+  d.gain.connect(d.analyser);
+  d.analyserBuf = new Float32Array(d.analyser.fftSize);
+}
+function detachAnalyser(id) {
+  const d = decks[id];
+  if (!d.analyser) return;
+  try { d.gain.disconnect(d.analyser); } catch {}
+  d.analyser = null; d.analyserBuf = null;
+}
+const meterLevel = { A: 0, B: 0 };
+let aidsRaf = null;
+function playheadSeconds(id) {
+  const d = decks[id];
+  if (!d.playing || !ctx) return d.offset;
+  const now = ctx.currentTime;
+  return d.offset + Math.max(0, now - d.mark) * d.rate;
+}
+function drawWave(id) {
+  const cv = $('wave' + id), d = decks[id];
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cw = cv.clientWidth, ch = cv.clientHeight;
+  if (!cw || !ch) return;
+  if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, cw, ch);
+  const track = round && tracks.find(t => t.id === (id === 'A' ? round.aId : round.bId));
+  if (d.peaks && d.buffer) {
+    const pos = playheadSeconds(id);
+    const binsPerPx = (WAVE_SPAN_S / WAVE_BIN_S) / cw;
+    const firstBin = (pos - WAVE_SPAN_S / 2) / WAVE_BIN_S;
+    const mid = ch / 2;
+    g.fillStyle = '#4a5160';
+    for (let x = 0; x < cw; x++) {
+      let p = 0;
+      const b0 = Math.floor(firstBin + x * binsPerPx), b1 = Math.floor(firstBin + (x + 1) * binsPerPx);
+      for (let b = b0; b <= b1; b++) if (b >= 0 && b < d.peaks.length && d.peaks[b] > p) p = d.peaks[b];
+      if (p > 0) { const h = Math.max(1, p * (ch - 6)); g.fillRect(x, mid - h / 2, 1, h); }
+    }
+    // Beat grid ticks: every beat from offset 0 (the downbeat), bar lines brighter.
+    if (track?.bpm) {
+      const beat = 60 / track.bpm;
+      const t0 = pos - WAVE_SPAN_S / 2, t1 = pos + WAVE_SPAN_S / 2;
+      for (let i = Math.max(0, Math.ceil(t0 / beat)); i * beat <= t1; i++) {
+        const x = ((i * beat - t0) / WAVE_SPAN_S) * cw;
+        g.fillStyle = i % 4 === 0 ? '#8a919e' : '#3a3f4a';
+        g.fillRect(Math.round(x), 0, 1, i % 4 === 0 ? ch : 6);
+      }
+    }
+    g.fillStyle = '#ff4a3c';
+    g.fillRect(Math.round(cw / 2) - 1, 0, 2, ch);
+  }
+  g.font = '600 10px "IBM Plex Mono", monospace';
+  g.fillStyle = '#f0b429';
+  g.textBaseline = 'top';
+  g.fillText(track?.bpm ? `${track.bpm.toFixed(2)} BPM` : '— BPM', 4, 3);
+}
+function drawMeters() {
+  for (const id of DECKS) {
+    const d = decks[id];
+    let peak = 0;
+    if (d.analyser && d.playing) {
+      d.analyser.getFloatTimeDomainData(d.analyserBuf);
+      for (let i = 0; i < d.analyserBuf.length; i++) { const a = Math.abs(d.analyserBuf[i]); if (a > peak) peak = a; }
+    }
+    // Fast attack, slow release — the ballistics of a bouncing meter.
+    meterLevel[id] = peak > meterLevel[id] ? peak : meterLevel[id] * 0.9;
+    const db = 20 * Math.log10(Math.max(1e-4, meterLevel[id]));
+    const frac = Math.max(0, Math.min(1, (db + 40) / 40));       // -40 dB..0 dB
+    $('meterMask' + id).style.transform = `scaleY(${(1 - frac).toFixed(3)})`;
+  }
+}
+function aidsFrame() {
+  aidsRaf = null;
+  if (!aids) return;
+  drawMeters();
+  for (const id of DECKS) drawWave(id);
+  if (DECKS.some(id => decks[id].playing) || DECKS.some(id => meterLevel[id] > 0.001)) aidsRaf = requestAnimationFrame(aidsFrame);
+}
+function kickAids() {
+  if (!aids || aidsRaf !== null) return;
+  aidsRaf = requestAnimationFrame(aidsFrame);
+}
+function setAids(on) {
+  aids = on;
+  [...$('aidsSeg').children].forEach(b => b.classList.toggle('on', (b.dataset.aids === 'on') === on));
+  for (const id of DECKS) {
+    $('wave' + id).hidden = !on;
+    $('meter' + id).hidden = !on;
+    if (on) { if (decks[id].gain) attachAnalyser(id); } else detachAnalyser(id);
+  }
+  if (on) { measureFaders(); renderAllFaders(); kickAids(); }
+  else { if (aidsRaf !== null) { cancelAnimationFrame(aidsRaf); aidsRaf = null; } measureFaders(); renderAllFaders(); }
+}
+// Score out of 100 and stars for the reveal, Beatmatch PRO style (approximation).
+function parityScore(absBpm) {
+  const pct = Math.max(0, 100 - 20 * absBpm);
+  const stars = absBpm < 0.5 ? 5 : absBpm < 1 ? 4 : absBpm < 2 ? 3 : absBpm < 4 ? 2 : 1;
+  return { pct, stars };
 }
 
 // ---------- Fader ----------
@@ -991,6 +1123,12 @@ revealBtn.addEventListener('click', async () => {
     $('revealSub').textContent = 'tempo off (no BPM tagged for deck 1)';
     sEl.className = 'reveal-score ' + (absErr <= 0.05 ? 'good' : absErr <= 0.25 ? 'mid' : 'bad');
   }
+  const parity = $('revealParity');
+  if (aids && absBpm !== null) {
+    const { pct, stars } = parityScore(absBpm);
+    parity.innerHTML = `Score ${pct.toFixed(0)}% · <span class="stars">${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</span>`;
+    parity.hidden = false;
+  } else parity.hidden = true;
   const dir = err > 0 ? 'fast' : 'slow';
   const sign = v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
   // With both faders live the answer is a relationship, not a single position:
@@ -1049,6 +1187,11 @@ $('diffSeg').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn) return;
   difficulty = btn.dataset.diff;
   [...$('diffSeg').children].forEach(b => b.classList.toggle('on', b === btn));
+});
+$('aidsSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  setAids(btn.dataset.aids === 'on');
+  db.setSetting('aids', aids).catch(() => {});
 });
 $('splitSeg').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn) return;
@@ -1136,7 +1279,8 @@ function registerSW() {
 // the app reads this.
 window.__bmt = {
   get ctx() { return ctx; }, get master() { return master; }, get round() { return round; },
-  get tracks() { return tracks; }, get xfade() { return xfade; }, decks, rateFor, phraseStart, deckGain,
+  get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
+  decks, rateFor, phraseStart, deckGain, parityScore,
 };
 
 // ---------- Init ----------
@@ -1144,6 +1288,7 @@ async function init() {
   db.requestPersistence();
   try { setSplit(await db.getSetting('split', false)); } catch {}
   try { setBeatFocus(await db.getSetting('beatFocus', false)); } catch {}
+  try { setAids(await db.getSetting('aids', false) === true); } catch {}
   try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
   catch { setPitchRange(BASE_RANGE); }
   try { const x = await db.getSetting('xfade', 0.5); if (typeof x === 'number' && x >= 0 && x <= 1) xfade = x; } catch {}

@@ -42,6 +42,18 @@ try {
   await page.click('#sheetClose'); await page.waitForTimeout(200);
   await page.click('#revealBtn'); await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(out, 'reveal.png') });
+  // Visual aids on, both decks playing.
+  await page.click('#retryBtn'); await page.waitForTimeout(200);
+  await page.click('#menuBtn'); await page.waitForTimeout(200);
+  await page.click('#aidsSeg button[data-aids="on"]'); await page.waitForTimeout(100);
+  await page.click('#sheetClose'); await page.waitForTimeout(200);
+  await page.waitForFunction(() => window.__bmt.decks.A.ready && window.__bmt.decks.B.ready, null, { timeout: 30000 });
+  await page.dispatchEvent('#playA', 'pointerdown', { pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true });
+  await page.dispatchEvent('#playB', 'pointerdown', { pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: path.join(out, 'aids.png') });
+  await page.click('#revealBtn'); await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(out, 'reveal-aids.png') });
   console.log('shots in', out);
 } catch (e) { console.log('ERR', e.message); }
 await browser.close(); server.kill();

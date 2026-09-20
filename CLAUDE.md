@@ -12,11 +12,18 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   The ×2 button opens the fader to ±16% for pairs that need headroom; ±8% is
   the default and the honest one. ×2 does not touch the hidden offset, so a
   wide round is no easier — it only adds travel.
-- The app must stay honest ear training: no visual tempo cues during play
-  (no waveforms, no BPM readouts of deck B's effective tempo, no drift meters).
-  Visual feedback belongs only on the reveal screen. This is why the mixer has
-  NO level meters even though Beatmatch PRO does — two bouncing meters let you
-  watch the kicks line up and match by eye. Don't add them.
+- The app must stay honest ear training BY DEFAULT: no visual tempo cues during
+  play (no waveforms, no BPM readouts of deck B's effective tempo, no drift
+  meters). Visual feedback belongs only on the reveal screen. Two bouncing
+  meters let you watch the kicks line up and match by eye.
+- Since 2026-09-20 there is a "Visual aids" setting (Beatmatch PRO parity,
+  owner's decision, default OFF, persisted as 'aids'): level meters, scrolling
+  waveforms with the beat grid, each track's TAGGED BPM (never deck B's
+  effective tempo — that would print the hidden offset), and a %/★ score on the
+  reveal (approximation: 100 − 20/BPM, 5★ under 0.5 BPM; the real formula is
+  not public). Off means off: setAids(false) detaches the analysers and stops
+  the rAF loop — verified by tools/harness/tests/aids.html. The aids loop is
+  separate from fader painting, which stays synchronous.
 
 ## Layout rules
 - The mixer is a fixed, non-scrolling surface (body is position:fixed, the .app

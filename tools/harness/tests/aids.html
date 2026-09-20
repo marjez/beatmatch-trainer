@@ -1,0 +1,57 @@
+<!doctype html><meta charset=utf-8><title>aids</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Visual aids off must cost nothing (no analyser in the graph, no animation
+// loop); on, the meters and waveforms must move and the pitch fader must stay
+// as cheap per move as it is with them off.
+import { post, sleep, bootApp, loadCrate, waitReady, pev, waitFor, stats } from './lib.js';
+const R = { failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+try {
+  const app = await bootApp(); await loadCrate(app); await waitReady(app);
+  const { w, g, bmt } = app;
+  const rafCount = async ms => { let n = 0; const orig = w.requestAnimationFrame; w.requestAnimationFrame = cb => { n++; return orig.call(w, cb); }; await sleep(ms); w.requestAnimationFrame = orig; return n; };
+  const dragCost = async () => {
+    const t = g('faderTrackA'), r = t.getBoundingClientRect(), cx = r.left + r.width / 2, knob = g('faderKnobA'), kh = knob.offsetHeight;
+    const y = r.top + parseFloat((knob.style.transform.match(/,\s*([-\d.]+)px/) || [0, 0])[1]) + kh / 2;
+    const ev = (ty, yy) => t.dispatchEvent(new w.PointerEvent(ty, { bubbles: true, pointerId: 1, clientX: cx, clientY: yy }));
+    ev('pointerdown', y); const cost = [];
+    for (let i = 1; i <= 60; i++) { const t0 = performance.now(); ev('pointermove', y + (i <= 30 ? i : 60 - i)); cost.push(performance.now() - t0); await sleep(8); }
+    ev('pointerup', y); return stats(cost);
+  };
+  // OFF (default)
+  pev(w, g('playA'), 'pointerdown'); pev(w, g('playB'), 'pointerdown'); await sleep(200);
+  R.off = { aids: bmt.aids, analyserA: !!bmt.decks.A.analyser, waveHidden: g('waveA').hidden, meterHidden: g('meterA').hidden,
+            rafCallsIn500ms: await rafCount(500), dragCostMs: await dragCost() };
+  if (R.off.aids || R.off.analyserA || !R.off.waveHidden || !R.off.meterHidden) fail('aids off is not off', R.off);
+  if (R.off.rafCallsIn500ms > 2) fail('animation loop running with aids off', R.off);
+  // ON
+  g('aidsSeg').querySelector('[data-aids="on"]').click(); await sleep(400);
+  const mask0 = g('meterMaskA').style.transform;
+  const samples = []; for (let i = 0; i < 10; i++) { samples.push(g('meterMaskA').style.transform); await sleep(50); }
+  const cv = g('waveA'), ctx2 = cv.getContext('2d'); const px = ctx2.getImageData(0, 0, cv.width, cv.height).data;
+  let lit = 0; for (let i = 3; i < px.length; i += 4) if (px[i] > 0) lit++;
+  R.on = { aids: bmt.aids, analyserA: !!bmt.decks.A.analyser, analyserB: !!bmt.decks.B.analyser, waveHidden: g('waveA').hidden,
+           meterDistinctValues: new Set(samples).size, waveLitPixels: lit, canvas: [cv.width, cv.height],
+           rafCallsIn500ms: await rafCount(500), dragCostMs: await dragCost() };
+  if (!R.on.analyserA || !R.on.analyserB || R.on.waveHidden) fail('aids on did not attach', R.on);
+  if (R.on.meterDistinctValues < 3) fail('meter not moving', R.on);
+  if (R.on.waveLitPixels < 200) fail('waveform blank', R.on);
+  if (R.on.rafCallsIn500ms < 20) fail('animation loop not running with aids on', R.on);
+  if (R.on.dragCostMs.median > 1.5) fail('fader got expensive with aids on', R.on);
+  // Reveal shows the parity line only with aids on
+  g('revealBtn').click(); await sleep(100);
+  R.revealParity = g('revealParity').textContent; R.revealParityHidden = g('revealParity').hidden;
+  if (R.revealParityHidden || !/Score \d+% · [★☆]{5}/.test(R.revealParity)) fail('parity line missing on reveal', R.revealParity);
+  g('nextBtn').click(); await waitReady(app);
+  // OFF again: loop stops, analysers detached, parity line hidden
+  g('aidsSeg').querySelector('[data-aids="off"]').click(); await sleep(300);
+  R.offAgain = { analyserA: !!bmt.decks.A.analyser, rafCallsIn500ms: await rafCount(500) };
+  if (R.offAgain.analyserA || R.offAgain.rafCallsIn500ms > 2) fail('aids did not switch off cleanly', R.offAgain);
+  R.scoreMap = [0, 0.3, 0.5, 0.99, 1, 2, 4, 6].map(b => [b, bmt.parityScore(b)]);
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>
