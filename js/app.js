@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js';
+import * as db from './db.js?v=bmt-v20';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -1065,6 +1065,14 @@ function fineFactor(dx) {
 // drag on the real device so the next fix is aimed at measured behaviour.
 const dragProfiler = {
   times: [], self: [], frames: 0, rafId: null, last: null,
+  fingerPx: 0, knobPx: 0, maxDx: 0, minFine: 1,
+  // Finger travel vs knob travel for the last drag, so "the knob moves less
+  // than my thumb" can be read as a ratio on the device instead of guessed at.
+  travel(fingerDelta, knobDelta, dx, fine) {
+    this.fingerPx += Math.abs(fingerDelta); this.knobPx += Math.abs(knobDelta);
+    if (Math.abs(dx) > this.maxDx) this.maxDx = Math.abs(dx);
+    if (fine < this.minFine) this.minFine = fine;
+  },
   sample(selfMs) {
     const t = performance.now();
     if (this.last !== null) this.times.push(t - this.last);
@@ -1079,7 +1087,9 @@ const dragProfiler = {
   finish() {
     if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
     const g = this.times.slice(), sf = this.self.slice();
+    const travel = { fingerPx: Math.round(this.fingerPx), knobPx: Math.round(this.knobPx), maxDx: Math.round(this.maxDx), minFine: +this.minFine.toFixed(2) };
     this.times = []; this.self = []; this.last = null;
+    this.fingerPx = 0; this.knobPx = 0; this.maxDx = 0; this.minFine = 1;
     if (g.length < 5) return;
     const sorted = [...g].sort((a, b) => a - b);
     const med = sorted[Math.floor(sorted.length / 2)];
@@ -1093,6 +1103,7 @@ const dragProfiler = {
       stalls: g.filter(x => x > 40).length,
       fps: span > 0 ? Math.round(this.frames / (span / 1000)) : 0,
       handlerMaxMs: sf.length ? +Math.max(...sf).toFixed(2) : null,
+      ...travel,
     };
     renderProfile();
   },
@@ -1106,6 +1117,7 @@ function renderProfile() {
     ? `${r.moves} moves · ${r.hz ? r.hz + ' Hz' : '—'} touch · ${r.fps} fps · `
       + `median gap ${r.medianGapMs} ms · worst ${r.worstGapMs} ms · ${r.stalls} stalls >40 ms`
       + (r.handlerMaxMs !== null ? ` · our handler max ${r.handlerMaxMs} ms` : '')
+      + ` · finger ${r.fingerPx} px → knob ${r.knobPx} px · sideways max ${r.maxDx} px · fine min ×${r.minFine}`
     : 'Drag a pitch fader, then reopen this menu.';
 }
 
@@ -1154,11 +1166,14 @@ function bindFader(track, knob, { get, set, fine = false, onFine = null, axis = 
     // At full sensitivity the virtual position tracks the finger exactly, so
     // the knob sits under it. Fine mode lets it lag deliberately — standard
     // DAW behaviour.
-    virtual += (along(e) - last) * pendingFine;
+    const fingerDelta = along(e) - last;
+    virtual += fingerDelta * pendingFine;
     last = along(e);
+    const prevKnob = get() * box.usable;
     const knobStart = Math.max(0, Math.min(box.usable, virtual - grabOffset));
     virtual = knobStart + grabOffset;                // clamp without wind-up
     set(box.usable ? knobStart / box.usable : 0);
+    dragProfiler.travel(fingerDelta, knobStart - prevKnob, across(e) - box.startAcross, pendingFine);
     if (onFine) onFine(pendingFine);
     dragProfiler.sample(performance.now() - t0);
   });
@@ -1504,7 +1519,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v19';
+const APP_BUILD = 'bmt-v20';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;

@@ -45,7 +45,7 @@ def find_browser():
     return None
 
 
-def serve(directory: Path, port: int, out: Path, mounts=None):
+def serve(directory: Path, port: int, out: Path, mounts=None, bind="127.0.0.1"):
     mounts = mounts or {}
 
     class H(http.server.SimpleHTTPRequestHandler):
@@ -80,7 +80,7 @@ def serve(directory: Path, port: int, out: Path, mounts=None):
     # 10 MB audio file on a single-threaded server stalls everything behind it.
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     socketserver.ThreadingTCPServer.daemon_threads = True
-    httpd = socketserver.ThreadingTCPServer(("127.0.0.1", port), H)
+    httpd = socketserver.ThreadingTCPServer((bind, port), H)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd
 

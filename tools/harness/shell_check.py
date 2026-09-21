@@ -29,7 +29,7 @@ needed.update(re.findall(r'"src":\s*"([^"]+)"', manifest))
 needed.update("js/" + m for m in re.findall(r"import\('\./([^']+)'\)", app))   # dynamic imports, relative to js/
 needed.update("js/" + m for m in re.findall(r"from '\./([^']+)'", app))
 needed.update(re.findall(r"url\(([^)h][^)]*)\)", css))
-needed = {n for n in needed if not n.startswith(("data:", "#"))}
+needed = {n.split("?")[0] for n in needed if not n.startswith(("data:", "#"))}   # ?v= build stamps
 needed.add("index.html")
 
 status = 0
@@ -51,6 +51,10 @@ cache = re.search(r"const CACHE = '([^']+)'", sw).group(1)
 build = re.search(r"const APP_BUILD = '([^']+)'", app).group(1)
 if cache != build:
     print(f"sw.js CACHE {cache!r} != app.js APP_BUILD {build!r}")
+    status = 1
+stamps = set(re.findall(r"\?v=([\w.-]+)", html)) | set(re.findall(r"\?v=([\w.-]+)", app))
+if stamps != {build}:
+    print(f"?v= stamps {sorted(stamps)} != APP_BUILD {build!r}")
     status = 1
 print(f"shell: {len(shell)} entries, build {build}, {'OK' if status == 0 else 'PROBLEMS'}")
 sys.exit(status)
