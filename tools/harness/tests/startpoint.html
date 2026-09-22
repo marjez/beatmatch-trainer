@@ -27,17 +27,23 @@ try {
       const sched = bmt.decks[id].mark;
       await sleep(SPAN * 1000 + 300); await rec.settle(sched + SPAN);
       const rate = bmt.rateFor(id);
-      const expected = Math.floor(SPAN / (60 / tr.bpm / rate));
-      // Onsets across the span, counted against a threshold relative to this
-      // track's own loudest moment in the window (masters vary a lot).
-      const peak = rec.peak(sched, sched + SPAN);
-      const hits = rec.onsets(sched, sched + SPAN, Math.max(0.05, peak * 0.45)).length;
+      const period = 60 / tr.bpm / rate;
+      const g2 = rec.gridScore(sched, sched + SPAN, period);
       const rec1 = { track: tr.name.slice(0, 34), start: +bmt.phraseStart(tr, 600).toFixed(1), bpm: tr.bpm,
-                     expectedBeats: expected, kicksIn8s: hits, ratio: +(hits / expected).toFixed(2), peak: +peak.toFixed(3) };
+                     beats: g2.beats, onGridHits: g2.onGridHits, onOffRatio: g2.ratio,
+                     hitRate: +(g2.onGridHits / g2.beats).toFixed(2), firstKickMs: g2.firstMs };
       R.tracks.push(rec1);
-      // Four-to-the-floor is one kick per beat; half that means the beat is not
-      // running (pad, breakdown, intro).
-      if (hits < expected * 0.5) fail('starts where the beat is not running', rec1);
+      // A beat that is running puts far more kick-band energy on the grid than
+      // between it, on most beats of the window.
+      if (!(g2.ratio > 1.4) || g2.onGridHits < g2.beats * 0.7) fail('the beat does not run on the grid from the start point', rec1);
+      // Phase: the first strong kick must land ON the grid. Not necessarily on
+      // beat 1 — plenty of bars open with something other than a kick — but
+      // its distance to the nearest predicted beat must be small. A 250 ms
+      // phase error, which the old count-based check passed, fails here.
+      const P = period * 1000;
+      const phaseErr = g2.firstMs === null ? null : Math.abs(g2.firstMs - Math.round(g2.firstMs / P) * P);
+      rec1.phaseErrMs = phaseErr === null ? null : +phaseErr.toFixed(1);
+      if (phaseErr === null || phaseErr > 25) fail('playback does not begin on the beat grid', rec1);
       pev(w, g('play' + id), 'pointerdown'); await sleep(120);
     }
   }

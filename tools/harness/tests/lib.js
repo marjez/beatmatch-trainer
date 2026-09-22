@@ -130,6 +130,53 @@ export async function tapMaster(app) {
       }
       return out;
     },
+    // Kick-band envelope at 1 ms resolution: a two-pole 120 Hz low-pass
+    // (biquad, computed here over the captured samples) then RMS per hop.
+    // Counting broadband onsets called a kickless intro's hats "kicks".
+    lowEnvelope(t0, t1) {
+      const f = 120 / sr, w = 2 * Math.PI * f, q = 0.7;
+      const alpha = Math.sin(w) / (2 * q), cosw = Math.cos(w);
+      const a0 = 1 + alpha;
+      const b = [(1 - cosw) / 2 / a0, (1 - cosw) / a0, (1 - cosw) / 2 / a0];
+      const a = [(-2 * cosw) / a0, (1 - alpha) / a0];
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+      const hop = Math.round(sr / 1000);
+      const out = [];
+      let acc = 0, n = 0;
+      for (const [, v] of samples(t0, t1)) {
+        const y = b[0] * v + b[1] * x1 + b[2] * x2 - a[0] * y1 - a[1] * y2;
+        x2 = x1; x1 = v; y2 = y1; y1 = y;
+        acc += y * y; n++;
+        if (n === hop) { out.push(Math.sqrt(acc / n)); acc = 0; n = 0; }
+      }
+      return out;                       // index = ms since t0
+    },
+    // Is a beat RUNNING on this grid? Mean kick-band energy in a ±15 ms window
+    // around each predicted beat, against the same windows placed off-beat.
+    // Ratio ≫ 1 means kicks are landing where the tempo says they should —
+    // no thresholds tuned to one kind of material.
+    gridScore(t0, t1, periodS, tolMs = 15) {
+      const env = this.lowEnvelope(t0, t1);
+      const P = periodS * 1000;
+      const mean = (centre) => {
+        let sum = 0, k = 0;
+        for (let i = Math.round(centre - tolMs); i <= Math.round(centre + tolMs); i++) {
+          if (i >= 0 && i < env.length) { sum += env[i]; k++; }
+        }
+        return k ? sum / k : 0;
+      };
+      const beats = Math.floor((env.length - tolMs) / P);
+      let on = 0, off = 0, hits = 0;
+      for (let k = 0; k < beats; k++) {
+        const e = mean(k * P), o = mean(k * P + P / 2);
+        on += e; off += o;
+        if (e > o * 1.3) hits++;
+      }
+      // Where the first strong kick actually is, in ms from t0.
+      let firstMs = null, peak = 0;
+      for (let i = 0; i < Math.min(env.length, Math.round(P)); i++) if (env[i] > peak) { peak = env[i]; firstMs = i; }
+      return { beats, onGridHits: hits, ratio: off > 0 ? +(on / off).toFixed(2) : null, firstMs };
+    },
     disconnect() { try { tapPoint.disconnect(node); } catch {} node.port.onmessage = null; },
   };
 }

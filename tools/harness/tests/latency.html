@@ -110,8 +110,33 @@ try {
   R.backCueA = { tapToSilenceMs: last !== null ? +((last - t1) * 1000).toFixed(2) : 0,
                  offsetAfter: bmt.decks.A.offset, playing: bmt.decks.A.playing, previewing: bmt.decks.A.previewing };
 
+  // Thresholds. Bug 1 (Play bound to click, 90 ms late) showed up here as a
+  // number nobody compared: this page posted a prose verdict whatever it
+  // measured. Re-binding Play to pointerup takes pressToSound from 0.1 ms to
+  // 76 ms, which now fails.
+  const F = [];
+  const check = (ok, msg) => { if (!ok) F.push(msg); };
+  const budget = R.quantumMs * 2 + 5;          // scheduling + two render quanta
+  for (const [name, v] of [['playA', R.playA], ['playB', R.playB], ['cueA', R.cueA], ['cueB', R.cueB]]) {
+    check(v.pressToSoundMs && v.pressToSoundMs.median < budget, `${name} press→sound ${JSON.stringify(v.pressToSoundMs)} (budget ${budget.toFixed(1)} ms)`);
+    check(v.scheduledStartMs.max <= R.quantumMs * 2 + 1, `${name} scheduled ${v.scheduledStartMs.max} ms after the press — it must start ON the press`);
+    check(v.handlerSyncMs.max < 8, `${name} handler took ${v.handlerSyncMs.max} ms`);
+    check(v.onsetGapErrMaxAbsMs < 1.5, `${name} beat spacing off by ${v.onsetGapErrMaxAbsMs} ms`);
+    if (v.firstOnsetVsScheduledMs) check(Math.abs(v.firstOnsetVsScheduledMs.median) < 12, `${name} first kick ${v.firstOnsetVsScheduledMs.median} ms from the scheduled start — offset 0 must BE the downbeat`);
+  }
+  check(R.firstPressEver.playing === true, 'the first press of the session did not start the deck');
+  check(R.firstPressEver.scheduledStartMs <= R.quantumMs * 2 + 1, `first press scheduled ${R.firstPressEver.scheduledStartMs} ms late`);
+  for (const [name, v] of [['cueA', R.cueA], ['cueB', R.cueB]]) {
+    check(v.releaseToSilenceMs.max < 40, `${name} kept sounding ${v.releaseToSilenceMs.max} ms after release`);
+    check(v.stateAfter.offset === 0 && v.stateAfter.previewing === false && v.stateAfter.playing === false, `${name} left the deck in ${JSON.stringify(v.stateAfter)}`);
+  }
+  check(R.stopA_pressToSilenceMs.max < 40, `stop took ${R.stopA_pressToSilenceMs.max} ms`);
+  check(R.backCueA.offsetAfter === 0 && R.backCueA.playing === false, `back-cue left ${JSON.stringify(R.backCueA)}`);
+  check(R.graphBuiltBeforeFirstPress === true, 'the audio graph was not built before the first press');
+  check(app.errs.length === 0, `js errors: ${app.errs.join(' | ')}`);
   R.jsErrors = app.errs;
-  R.verdict = 'scheduledStart ~0 (starts on the press); pressToSound ~ quantum + baseLatency; firstOnsetVsScheduled ~0 (offset 0 is the downbeat); onset gap err ~0; stop/release within a quantum or two';
+  R.failures = F;
+  R.verdict = F.length ? 'FAIL' : 'PASS';
   rec.disconnect();
   await post(R);
 } catch (e) { await post({ fatal: String(e && e.stack || e) }); }

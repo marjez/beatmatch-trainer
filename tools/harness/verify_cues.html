@@ -1,0 +1,65 @@
+<!doctype html><meta charset=utf-8><title>verify cues</title>
+<style>html,body{margin:0;background:#14161a;color:#c9cdd4;font:12px monospace}iframe{width:390px;height:844px;border:0}</style>
+<iframe id=f src="/index.html"></iframe><pre id=o></pre>
+<script type=module>
+// Verify every candidate drop-in cue by PLAYING it through the real audio
+// path, and keep only the ones that measure clean. A static analysis of the
+// file disagreed with what the app actually plays — the grid can shift within
+// a track, and a global phase estimate is wrong locally. This closes that
+// loop: the cues that ship are the cues that were heard to work.
+//
+//   mount the audio at /crate/ (files.json + crate.json with candidate cues)
+//   and the result is the verified crate.json body.
+import { post, sleep, bootApp, loadCrate, waitReady, tapMaster, pev, waitFor } from './tests/lib.js';
+const log = s => { document.getElementById('o').textContent += s + '\n'; };
+try {
+  const app = await bootApp();
+  const files = await (await fetch('/crate/files.json')).json();
+  const manifest = await (await fetch('/crate/crate.json')).json();
+  const byFile = new Map(manifest.tracks.map(t => [t.file, t]));
+  await loadCrate(app);
+  await waitReady(app);
+  const { w, g, bmt } = app;
+  pev(w, g('playA'), 'pointerdown'); await sleep(50); pev(w, g('playA'), 'pointerdown'); await sleep(100);
+  const rec = await tapMaster(app);
+  const SPAN = 8;
+  const out = [];
+  for (const name of files) {
+    const stem = name.replace(/\.[^.]+$/, '');
+    const track = bmt.tracks.find(t => t.name === stem);
+    const meta = byFile.get(name);
+    if (!track || !meta) { log(`SKIP ${name}`); continue; }
+    const period = 60 / track.bpm;
+    const good = [];
+    // Only the cues the app can actually choose (phraseStart takes the first
+    // at or after its 30 s target, minus half a phrase), and stop once two
+    // have been verified — a full sweep is minutes per track.
+    const phrase = 16 * period;
+    const candidates = (meta.cues || []).filter(c => c >= 30 - phrase / 2).slice(0, 6);
+    for (const cue of candidates) {
+      if (good.length >= 2) break;
+      // Put the deck's window at this cue by loading the track with only it.
+      track.cues = [cue];
+      const id = 'A';
+      // Reload deck A at this cue through the app's own loader.
+      await bmt.loadDeck(id, track);
+      await waitFor(() => bmt.decks[id].ready, 30000, 'deck ready');
+      bmt.decks[id].offset = 0;
+      rec.clear(); await sleep(80);
+      pev(w, g('play' + id), 'pointerdown');
+      const sched = bmt.decks[id].mark;
+      await sleep(SPAN * 1000 + 250); await rec.settle(sched + SPAN);
+      const s = rec.gridScore(sched, sched + SPAN, period / bmt.rateFor(id));
+      pev(w, g('play' + id), 'pointerdown'); await sleep(100);
+      const P = period / bmt.rateFor(id) * 1000;
+      const phase = s.firstMs === null ? 9e9 : Math.abs(s.firstMs - Math.round(s.firstMs / P) * P);
+      const ok = s.ratio > 1.5 && s.onGridHits >= s.beats * 0.8 && phase <= 20;
+      log(`${ok ? 'KEEP' : 'drop'} ${cue.toFixed(3).padStart(8)}s  ratio ${String(s.ratio).padStart(5)}  hits ${s.onGridHits}/${s.beats}  phase ${phase.toFixed(0)}ms  ${stem.slice(0, 28)}`);
+      if (ok) good.push(cue);
+    }
+    out.push({ file: name, bpm: track.bpm, anchor: track.anchor, cues: good });
+    log(`  → ${good.length} verified of ${candidates.length} tried for ${stem.slice(0, 40)}`);
+  }
+  await post({ measurementOnly: true, tracks: out });
+} catch (e) { await post({ measurementOnly: true, fatal: String(e && e.stack || e) }); }
+</script>

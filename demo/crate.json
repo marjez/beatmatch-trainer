@@ -1,7 +1,7 @@
 {
  "version": 1,
  "playlist": "Demo crate",
- "note": "Creative Commons BY tracks from netlabels on the Internet Archive. Audio is fetched from archive.org when you load the demo crate and stored on your device; nothing is bundled. BPM, beat grid and the drop-in cues were analysed with tools/harness/analyse_crate.html: each cue is a 4-bar phrase boundary from which the beat runs for at least 8 bars, so a deck never starts in an intro or a breakdown.",
+ "note": "Creative Commons BY tracks from netlabels on the Internet Archive. Audio is fetched from archive.org when you load the demo crate and stored on your device; nothing is bundled. Every drop-in cue here was VERIFIED by playing it through the app and measuring the output (tools/harness/verify_cues.html): the kick band must carry more energy on the beats than between them for 8 bars, and the first kick must land on the grid. Tracks whose cues could not be verified were left out rather than shipped with a guess.",
  "tracks": [
   {
    "file": "Dako Loop Orchestra - Dakophazer 120bpm.mp3",
@@ -9,11 +9,8 @@
    "bpm": 120,
    "anchor": 1.021,
    "cues": [
-    41.021,
     81.021,
-    121.021,
-    161.021,
-    233.021
+    121.021
    ],
    "gridConfidence": 10.6,
    "duration": 292.8,
@@ -31,15 +28,7 @@
    "bpm": 122,
    "anchor": 1.3168,
    "cues": [
-    87.874,
-    119.35,
-    158.694,
-    198.038,
-    229.514,
-    268.858,
-    308.202,
-    339.678,
-    379.022
+    237.382
    ],
    "gridConfidence": 8.81,
    "duration": 431.9,
@@ -52,48 +41,13 @@
    "page": "https://archive.org/details/unfound88"
   },
   {
-   "file": "Klaus PP & Sloxxx - Aestate 120bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_04_-_klaus_pp_and_sloxxx_-_aestate.mp3",
-   "bpm": 120,
-   "anchor": 0.0489,
-   "cues": [
-    16.049,
-    56.049,
-    96.049,
-    136.049,
-    176.049,
-    216.049,
-    256.049,
-    296.049,
-    336.049
-   ],
-   "gridConfidence": 8.5,
-   "duration": 408.6,
-   "artist": "Klaus PP & Sloxxx",
-   "title": "Aestate",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
    "file": "Yoma - Box 119bpm.mp3",
    "url": "https://archive.org/download/unfound88/unfound88_05_-_yoma_-_box.mp3",
    "bpm": 119,
    "anchor": 1.0433,
    "cues": [
-    1.043,
-    33.312,
-    65.581,
-    97.85,
     130.119,
-    162.388,
-    194.657,
-    226.926,
-    259.195,
-    299.531,
-    331.8
+    162.388
    ],
    "gridConfidence": 8.52,
    "duration": 398.4,
@@ -112,12 +66,7 @@
    "anchor": 0.0858,
    "cues": [
     61.526,
-    92.246,
-    122.966,
-    184.406,
-    215.126,
-    368.726,
-    399.446
+    184.406
    ],
    "gridConfidence": 8.86,
    "duration": 547.2,
@@ -135,13 +84,8 @@
    "bpm": 122,
    "anchor": 0.5716,
    "cues": [
-    32.047,
-    71.391,
-    142.211,
-    189.424,
-    299.588,
-    338.932,
-    370.408
+    55.654,
+    134.342
    ],
    "gridConfidence": 11.74,
    "duration": 427.8,
@@ -154,109 +98,12 @@
    "page": "https://archive.org/details/unfound88"
   },
   {
-   "file": "Sloxxx - Sound One 120bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_11_-_sloxxx_-_sound_one.mp3",
-   "bpm": 120,
-   "anchor": 0.006,
-   "cues": [
-    112.006,
-    320.006
-   ],
-   "gridConfidence": 5.43,
-   "duration": 467.4,
-   "artist": "Sloxxx",
-   "title": "Sound One",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
-   "file": "Mika Technika - D.M.D 100bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_13_-_mika_technika_-_d_m_d.mp3",
-   "bpm": 100,
-   "anchor": 1.5542,
-   "cues": [
-    97.554,
-    145.554,
-    231.954,
-    270.354
-   ],
-   "gridConfidence": 5.48,
-   "duration": 336.1,
-   "artist": "Mika Technika",
-   "title": "D.M.D",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
-   "file": "Artem Folevski - China Butique 128bpm.mp3",
-   "url": "https://archive.org/download/shoki005g/shoki005g-01_-_Artem_Folevski_-_China_Butique.mp3",
-   "bpm": 128,
-   "anchor": 0.2305,
-   "cues": [
-    75.23,
-    142.73,
-    180.23,
-    217.73,
-    285.23,
-    322.73,
-    360.23,
-    397.73
-   ],
-   "gridConfidence": 13.64,
-   "duration": 439,
-   "artist": "Artem Folevski",
-   "title": "China Butique",
-   "release": "Grey EP [shoki005g]",
-   "label": "Shoki Recordings",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/shoki005g"
-  },
-  {
-   "file": "Olympic Smoker - Smoked Lines 120bpm.mp3",
-   "url": "https://archive.org/download/shoki005g/shoki005g-02_-_Olympic_Smoker_-_Smoked_Lines.mp3",
-   "bpm": 120,
-   "anchor": 0.949,
-   "cues": [
-    0.949,
-    40.949,
-    80.949,
-    120.949,
-    160.949,
-    200.949,
-    240.949
-   ],
-   "gridConfidence": 7.07,
-   "duration": 268.2,
-   "artist": "Olympic Smoker",
-   "title": "Smoked Lines",
-   "release": "Grey EP [shoki005g]",
-   "label": "Shoki Recordings",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/shoki005g"
-  },
-  {
    "file": "Mr. Dee - Storm 128bpm.mp3",
    "url": "https://archive.org/download/shoki005g/shoki005g-03_-_Mr.Dee_-_Storm.mp3",
    "bpm": 128,
    "anchor": 1.502,
    "cues": [
-    1.502,
-    39.002,
-    84.002,
-    121.502,
-    159.002,
-    196.502,
-    241.502,
-    279.002,
-    316.502
+    211.502
    ],
    "gridConfidence": 12.6,
    "duration": 350.7,
@@ -269,40 +116,13 @@
    "page": "https://archive.org/details/shoki005g"
   },
   {
-   "file": "Sven Laux - Warren Knows Them Too (Original Mix) 97bpm.mp3",
-   "url": "https://archive.org/download/miniatura031SvenLaux-HoyMonkEp/01-svenLaux-WarrenKnowsThemToooriginalMix.mp3",
-   "bpm": 97,
-   "anchor": 1.3977,
-   "cues": [
-    11.295,
-    70.676,
-    110.264
-   ],
-   "gridConfidence": 4.35,
-   "duration": 201.7,
-   "artist": "Sven Laux",
-   "title": "Warren Knows Them Too (Original Mix)",
-   "release": "Hoy & Monk EP [miniatura 031]",
-   "label": "Miniatura Records",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/miniatura031SvenLaux-HoyMonkEp"
-  },
-  {
    "file": "Sven Laux - Hoy & Monk (Original Mix) 120bpm.mp3",
    "url": "https://archive.org/download/miniatura031SvenLaux-HoyMonkEp/02-svenLaux-HoyMonkoriginalMix.mp3",
    "bpm": 120,
    "anchor": 1.0619,
    "cues": [
-    1.062,
     41.062,
-    81.062,
-    121.062,
-    161.062,
-    201.062,
-    241.062,
-    289.062,
-    329.062
+    81.062
    ],
    "gridConfidence": 20.22,
    "duration": 372.1,
@@ -320,12 +140,7 @@
    "bpm": 122,
    "anchor": 0.0539,
    "cues": [
-    0.054,
-    39.398,
-    70.874,
-    110.218,
-    204.644,
-    259.726
+    39.398
    ],
    "gridConfidence": 17.61,
    "duration": 324.6,
@@ -343,13 +158,8 @@
    "bpm": 120,
    "anchor": 1.5249,
    "cues": [
-    25.525,
-    65.525,
-    105.525,
-    145.525,
-    185.525,
-    225.525,
-    265.525
+    41.525,
+    81.525
    ],
    "gridConfidence": 13.94,
    "duration": 322.1,
@@ -367,14 +177,8 @@
    "bpm": 120,
    "anchor": 1.514,
    "cues": [
-    1.514,
     41.514,
-    81.514,
-    121.514,
-    161.514,
-    201.514,
-    257.514,
-    297.514
+    81.514
    ],
    "gridConfidence": 21.9,
    "duration": 330.1,

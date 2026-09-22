@@ -5,6 +5,14 @@ the mix clipping, GC stalls freezing the fader, `requestAnimationFrame` adding
 latency, full-track decoding blowing iOS memory, play bound to `click` so the
 deck started a whole finger-tap late. Reach for these before theorising.
 
+**The runner fails on failures.** `browser_test.py` exits 1 when a page posts
+`fatal`, a non-empty `failures` list, or `jsErrors` — and also when a page
+posts no `failures` list at all without setting `measurementOnly: true`. It
+used to exit 0 whenever the page posted anything, so a test could report
+`verdict: FAIL` and the run still looked green. Audited 2026-09-22: that is
+how play-bound-to-click (90 ms late) and the first-kick-only start check both
+shipped past a "passing" suite.
+
 Works on macOS and Linux. Needs Chrome or Chromium; `browser_test.py` finds it
 on PATH or in /Applications. On a Linux box without root, Playwright's Chromium
 plus the missing .debs extracted under $HOME works — see "Linux without root".
@@ -33,7 +41,10 @@ python3 tools/harness/browser_test.py . tools/harness/tests/demo.html   --mount=
 node tools/harness/pw_offline.mjs /tmp/bmt-crate
 node tools/harness/pw_shot.mjs /tmp/bmt-crate /tmp/shots
 
-# beat-grid analysis for tracks without a Rekordbox grid (writes bpm/anchor/kickIn per file)
+# verify candidate drop-in cues by PLAYING them (what ships in demo/crate.json)
+python3 tools/harness/browser_test.py . tools/harness/verify_cues.html --mount=/crate=<dir + candidate crate.json> --timeout=1600
+
+# beat-grid analysis for tracks without a Rekordbox grid (writes bpm/anchor/cues per file)
 python3 tools/harness/browser_test.py . tools/harness/analyse_crate.html --mount=/crate=<dir of mp3s + files.json> --timeout=600
 
 # does the mix clip? two tracks summed through the shipping chain
@@ -67,3 +78,19 @@ dependencies — `ldd chrome | grep "not found"` lists them), `dpkg -x` each int
 and a `FONTCONFIG_FILE` pointing at the extracted fonts. Without a working font
 the renderer aborts with `SkFontMgr_FontConfigInterface: Not implemented` the
 moment the page lays out text.
+
+## What the tests actually assert
+
+Every page posts a `failures` array; the runner fails on it. `fader.html`,
+`latency.html` and `audio_chain.html` used to post a fixed prose verdict
+whatever they measured — they now carry thresholds, and both historical bugs
+fail them: Play on `pointerup` shows as 70 ms press-to-sound, and stubbing
+`phraseStart` shows as a 230 ms gap between the scheduled start and the first
+kick.
+
+`startpoint.html` judges the drop-in point by kick-band energy ON the beats
+against BETWEEN them, plus the phase of the first kick — counting onsets
+called a kickless intro's hats a running beat, and five of sixteen real
+tracks passed while starting in an intro. `verify_cues.html` applies the same
+measurement to every candidate cue by playing it, and only verified cues ship
+in `demo/crate.json`.

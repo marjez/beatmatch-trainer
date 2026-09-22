@@ -32,13 +32,20 @@ const post = o => fetch('/result', {method:'POST', body: JSON.stringify(o, null,
       const g=oc.createGain(); g.gain.value=deckGain; s.connect(g); g.connect(bus); s.start(0); }
     return (await oc.startRendering()).getChannelData(0);
   }
+  const shipping = stat(await chain(0.5, false));
+  const worst = stat(await chain(0.5, false, 1.0));
+  const F = [];
+  if (shipping.clippedPct !== 0) F.push(`shipping chain clipped ${shipping.clippedPct}% of samples`);
+  if (shipping.peak >= 0.95) F.push(`shipping chain peaked at ${shipping.peak}`);
+  if (worst.clippedPct !== 0 || worst.peak >= 0.95) F.push(`worst-case deck gain: peak ${worst.peak}, clipped ${worst.clippedPct}%`);
   await post({
+    failures: F,
+    verdict: F.length ? 'FAIL' : 'PASS',
     trackA: stat(a), trackB: stat(b),
     noHeadroom_theOldBug: stat(await chain(1.0, false, 0.85)),
-    shippingChain_busHalfNoLimiter: stat(await chain(0.5, false)),
-    shippingChain_worstCaseDeckGain1: stat(await chain(0.5, false, 1.0)),
+    shippingChain_busHalfNoLimiter: shipping,
+    shippingChain_worstCaseDeckGain1: worst,
     withLimiter_forComparison: stat(await chain(0.5, true)),
-    verdict: 'shippingChain clippedPct must be 0.00 and peak well under 1 — the limiter was removed because it cost 6 ms of look-ahead for a threshold this staging cannot reach',
   });
 })().catch(e => post({fatal: String(e && e.message || e)}));
 </script>

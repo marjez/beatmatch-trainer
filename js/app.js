@@ -1699,7 +1699,7 @@ if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
     get ctx() { return ctx; }, get master() { return master; },
     get round() { return round && { ...round }; },            // copy: writes must not reach the round
     get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
-    decks, rateFor, phraseStart, deckGain, parityScore,
+    decks, rateFor, phraseStart, deckGain, parityScore, loadDeck,
   };
 }
 

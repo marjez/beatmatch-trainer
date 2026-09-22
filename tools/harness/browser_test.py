@@ -133,7 +133,33 @@ def main():
         if not out.exists():
             print(f"No result within {timeout}s — the page probably threw before posting.")
             sys.exit(3)
-        print(json.dumps(json.loads(out.read_text()), indent=1))
+
+        result = json.loads(out.read_text())
+        print(json.dumps(result, indent=1))
+
+        # A green exit used to mean "the page posted something", not "the page
+        # passed": a test could report verdict FAIL with a populated failures
+        # list and this still exited 0. Audited and found: the reveal's colour
+        # band was wrong in a mutation, rounds.html caught it, and the run was
+        # reported as a pass.
+        problems = []
+        if isinstance(result, dict):
+            if result.get("fatal"):
+                problems.append(f"fatal: {result['fatal']}")
+            for f in result.get("failures") or []:
+                problems.append(str(f))
+            if result.get("jsErrors"):
+                problems.append(f"jsErrors: {result['jsErrors']}")
+            # A page with no failures list and no opt-out is a measurement dump
+            # that can never fail — which is how press-to-sound regressed by
+            # 90 ms with the suite green.
+            if "failures" not in result and not result.get("measurementOnly"):
+                problems.append("page posted no 'failures' list and did not set measurementOnly")
+        if problems:
+            print("\nFAIL:", file=sys.stderr)
+            for p in problems:
+                print(f"  - {p}", file=sys.stderr)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -46,8 +46,23 @@ setTimeout(async () => {
   R.xf_position = +w.__bmt.xfade.toFixed(3);
   R.xf_gains = { A: +w.__bmt.deckGain('A').toFixed(3), B: +w.__bmt.deckGain('B').toFixed(3),
                  equalPower: +(w.__bmt.deckGain('A')**2 + w.__bmt.deckGain('B')**2).toFixed(4) };
+  // Thresholds, not prose. This page used to post a fixed verdict string
+  // whatever the numbers were: GRAB_SLOP raised to 2800 (press anywhere and
+  // the knob jumps to the finger — the model CLAUDE.md forbids) moved
+  // pressBareTrack from 0 to 39.8 px and the page still "passed".
+  const F = [];
+  const check = (ok, msg) => { if (!ok) F.push(msg); };
+  check(R.pressBareTrack_mustNotMove === 0, `press on the bare track moved the knob ${R.pressBareTrack_mustNotMove}px`);
+  check(Math.abs(R.grab120px_knobShouldMove120 - 120) <= 2, `120px drag moved the knob ${R.grab120px_knobShouldMove120}px`);
+  check(Math.abs(R.knobStaysUnderFinger_px) <= 2, `knob ended ${R.knobStaysUnderFinger_px}px from the finger`);
+  check(R.perMoveCostMs.median < 1.5 && R.perMoveCostMs.max < 8, `per-move cost ${JSON.stringify(R.perMoveCostMs)}`);
+  check(R.xf_pressBareTrack_mustNotMove === 0, `crossfader bare press moved ${R.xf_pressBareTrack_mustNotMove}px`);
+  check(Math.abs(R.xf_grab80px_knobShouldMove80 - 80) <= 2, `crossfader 80px drag moved ${R.xf_grab80px_knobShouldMove80}px`);
+  check(Math.abs(R.xf_gains.equalPower - 1) < 0.01, `crossfader is not equal-power: A²+B² = ${R.xf_gains.equalPower}`);
+  check(errs.length === 0, `js errors: ${errs.join(' | ')}`);
   R.jsErrors = errs;
-  R.verdict = 'bare track 0, knob moves ~120, stays under finger ~0, cost well under 16ms; xf moves 80, A²+B² == 1';
+  R.failures = F;
+  R.verdict = F.length ? 'FAIL' : 'PASS';
   await post(R);
  } catch(e) { await post({fatal:String(e && e.message || e)}); }
 }, 2500);

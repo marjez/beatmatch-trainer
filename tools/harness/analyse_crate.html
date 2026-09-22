@@ -42,10 +42,9 @@ try {
       for (let i = 1; i < frames; i++) on[i] = Math.max(0, env[i] - env[i - 1]);
       let peak = 0; for (let i = 0; i < frames; i++) if (on[i] > peak) peak = on[i];
       if (peak > 0) for (let i = 0; i < frames; i++) on[i] /= peak;      // normalised, so the two are comparable
-      return on;
+      return { onset: on, env };
     };
-    const onsetLow = await envelope({ type: 'lowpass', hz: 150 });
-    const onsetAll = await envelope(null);
+    const { onset: onsetLow, env: envLow } = await envelope({ type: 'lowpass', hz: 150 });
     const onset = onsetLow;                  // the grid fit still follows the kick
     // Grid fit: period in ms around the detector's guess, ±1.5%, best phase per period.
     const fit = (bpmGuess) => {
@@ -82,14 +81,23 @@ try {
     const cues = [];
     let kickIn = null;
     {
-      // A beat counts as active if EITHER band says so.
-      const act = src => {
-        const at = []; for (let b = dbBest.k; b < best.beats; b++) at.push(src[Math.round(best.ph + b * best.p)]);
-        const sorted = [...at].sort((a, b) => a - b), ref = sorted[Math.floor(sorted.length * 0.5)] || 0;
-        return at.map(v => v > ref * 0.4);
+      // A beat is "active" when the KICK BAND carries more energy on it than
+      // between it. Counting onsets in either band called a kickless intro's
+      // hats a running beat — measured on the real crate, five of sixteen
+      // tracks were given cues that start in an intro. This is the same
+      // on-beat-vs-off-beat test tools/harness/tests/startpoint.html judges by.
+      const at = (src, i) => src[Math.max(0, Math.min(src.length - 1, Math.round(i)))];
+      const around = (src, i, tolFrames) => {
+        let m = 0; for (let k = -tolFrames; k <= tolFrames; k++) m = Math.max(m, at(src, i + k));
+        return m;
       };
-      const aLow = act(onsetLow), aAll = act(onsetAll);
-      const active = aLow.map((v, i) => v || aAll[i]);
+      const tol = Math.max(1, Math.round(0.015 / frameS));
+      const active = [];
+      for (let b = dbBest.k; b < best.beats; b++) {
+        const onBeat = around(envLow, best.ph + b * best.p, tol);
+        const offBeat = around(envLow, best.ph + (b + 0.5) * best.p, tol);
+        active.push(onBeat > offBeat * 1.3 && onBeat > 0);
+      }
       const strong = active;
       const need = SUSTAIN_BARS * 4;
       for (let ph = 0; ph + need <= active.length; ph += 16) {
