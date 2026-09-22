@@ -61,7 +61,7 @@ export async function waitFor(fn, ms = 10000, what = 'condition') {
 export const waitReady = app => waitFor(
   () => app.bmt.round && app.bmt.decks.A.ready && app.bmt.decks.B.ready, 30000, 'both decks ready');
 
-// Recording tap on the master bus. An AudioWorklet captures the post-limiter
+// Recording tap on the master bus. An AudioWorklet captures the post-filter
 // signal with the audio-clock frame of every block, so onsets are placed to
 // the sample. (A ScriptProcessorNode was tried first: its double-buffering
 // added ~12 ms that looked like app latency.)
@@ -71,7 +71,8 @@ export async function tapMaster(app) {
   await ctx.audioWorklet.addModule('/tools/harness/tests/tap-worklet.js');
   const node = new app.w.AudioWorkletNode(ctx, 'bmt-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
   const mute = ctx.createGain(); mute.gain.value = 0;
-  m.limiter.connect(node); node.connect(mute); mute.connect(ctx.destination);
+  const tapPoint = m.out || m.limiter || m.focus;      // the last node before the destination
+  tapPoint.connect(node); node.connect(mute); mute.connect(ctx.destination);
   const sr = ctx.sampleRate;
   const chunks = [];
   node.port.onmessage = e => {
@@ -116,7 +117,7 @@ export async function tapMaster(app) {
     // Kick onsets: positive-going threshold crossings on a 4 ms envelope with
     // a 150 ms refractory period. The synthetic kick is 0.9 peak at 55 Hz; the
     // drone under it sits at 0.04 and the hat at <= 0.25; after deck gain, the
-    // 0.5 bus and the limiter the kick lands at ~0.27, the hat at ~0.1.
+    // 0.5 bus the kick lands at ~0.27, the hat at ~0.1.
     onsets(t0, t1, thr = 0.15) {
       const out = [];
       let env = 0, armed = true, lastOn = -1;
@@ -129,7 +130,7 @@ export async function tapMaster(app) {
       }
       return out;
     },
-    disconnect() { try { m.limiter.disconnect(node); } catch {} node.port.onmessage = null; },
+    disconnect() { try { tapPoint.disconnect(node); } catch {} node.port.onmessage = null; },
   };
 }
 

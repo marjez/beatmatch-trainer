@@ -133,14 +133,15 @@ function ensureMaster() {
   // filtered nothing until you toggled it off and on again.
   focus.frequency.value = beatFocus ? BEAT_FOCUS_HZ : 20000;
   focus.Q.value = 0.7;
-  const limiter = c.createDynamicsCompressor();
-  limiter.threshold.value = -1.5;
-  limiter.knee.value = 0;
-  limiter.ratio.value = 20;
-  limiter.attack.value = 0.002;
-  limiter.release.value = 0.12;
-  input.connect(focus); focus.connect(limiter); limiter.connect(c.destination);
-  master = { input, focus, limiter };
+  // No DynamicsCompressor any more. Measured: its fixed 6 ms look-ahead was
+  // 6.0 of the 6.1 ms press-to-sound — nearly the whole latency budget — and
+  // with the equal-power crossfader (≤0.707/deck), the split panner's 0.707
+  // and the 0.5 bus, two coherent full-scale peaks bound the master at ~0.5,
+  // some 5 dB below its -1.5 dB threshold. It could not engage; it only added
+  // latency and 0.85 dB of makeup gain. The headroom that actually prevents
+  // clipping is the 0.5 bus, and that stays.
+  input.connect(focus); focus.connect(c.destination);
+  master = { input, focus, limiter: null, out: focus };
   return master;
 }
 function setBeatFocus(on) {
@@ -233,8 +234,18 @@ async function detectBPMFallback(buffer) {
 async function decodeForAnalysis(trackId) {
   ensureCtx();
   const t = tracks.find(x => x.id === trackId);
-  const arr = await t.blob.arrayBuffer();
-  return ctx.decodeAudioData(arr);
+  // Through loadChain, like every other full decode: the Detect button could
+  // otherwise run its ~200 MB decode while a round's deck was still decoding,
+  // which is the two-full-buffers case that kills the tab on iOS.
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const mine = loadChain.then(() => gate);
+  loadChain = mine;
+  await loadChain.catch(() => {});
+  try {
+    const arr = await t.blob.arrayBuffer();
+    return await ctx.decodeAudioData(arr);
+  } finally { release(); }
 }
 
 // ---------- Library ----------
@@ -257,7 +268,13 @@ function applyGrid(rec, meta) {
   let changed = false;
   if (typeof meta.anchor === 'number' && rec.anchor !== meta.anchor) { rec.anchor = meta.anchor; changed = true; }
   if (Array.isArray(meta.cues) && meta.cues.length) { rec.cues = meta.cues; changed = true; }
-  if (typeof meta.bpm === 'number' && !rec.bpm) { rec.bpm = meta.bpm; rec.bpmSource = 'name'; changed = true; }
+  // Rekordbox's own BPM beats our detector's guess: taking the anchor while
+  // keeping an auto-detected tempo computes the phrase grid with the wrong
+  // beat length — a 125.0-vs-126.02 discrepancy puts the "downbeat" 240 ms
+  // out, half a beat, which is outside the flam window.
+  if (typeof meta.bpm === 'number' && (!rec.bpm || rec.bpmSource === 'auto')) {
+    rec.bpm = meta.bpm; rec.bpmSource = 'name'; changed = true;
+  }
   return changed;
 }
 
@@ -496,11 +513,12 @@ function canStart() {
 // "quarter of the way in" guess.
 const BEATS_PER_PHRASE = 16;   // 4 bars of 4/4
 function phraseStart(track, duration) {
-  return 0;
   const target = duration > 90 ? Math.min(30, duration * 0.25) : 0;
   if (typeof track?.anchor !== 'number' || !track?.bpm) return target;
   const phrase = BEATS_PER_PHRASE * (60 / track.bpm);
-  const snap = t => track.anchor + Math.round((t - track.anchor) / phrase) * phrase;
+  // Snap UP: rounding to the nearest phrase boundary could pull a cue up to
+  // two bars earlier — back into the intro the cue exists to skip.
+  const snap = t => track.anchor + Math.ceil((t - track.anchor) / phrase - 1e-6) * phrase;
   // Cue points (Rekordbox memory cues, or the analyser's "kick in" for the demo
   // crate) mark where the track is worth dropping in. A 9-minute track is often
   // still beatless 30 s in — measured on the demo crate — so the first cue at
@@ -750,7 +768,14 @@ function startSource(id, from, when) {
   d.mark = Math.max(startAt, c.currentTime);
   d.playing = true;
   src.onended = () => {
-    if (d.source === src) { d.source = null; d.playing = false; updateTransport(); }
+    if (d.source !== src) return;
+    d.source = null; d.playing = false;
+    // Running off the end left d.offset wherever the last markPosition put it,
+    // so Play afterwards either restarted the phrase or played a few seconds
+    // and died, depending on whether you had touched the fader. Back to the
+    // cue point, which is what a deck at the end of a record gives you.
+    d.offset = 0;
+    updateTransport();
   };
   return true;
 }
@@ -1599,14 +1624,42 @@ const APP_BUILD = 'bmt-v22';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
+  // A new worker no longer takes over on its own (sw.js dropped skipWaiting
+  // from install). It used to reload the page the moment a deploy landed —
+  // mid-round, or during the first-run file picker, losing the round and
+  // aborting whatever was in flight. Now an update waits and says so.
+  //
+  // Reload when a NEW worker takes over, not when the first one claims a page
+  // that is already running its code. Taking an update deliberately sets this
+  // too, so the button works in the session that first installed the app.
+  let reloadOnTakeover = !!navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return;
+    if (reloading || !reloadOnTakeover) return;
     reloading = true;
     location.reload();
   });
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
     .then(reg => {
+      let pending = null;
+      const offer = worker => {
+        if (!worker) return;
+        pending = worker;
+        const btn = $('forceUpdate');
+        btn.textContent = 'Update now';
+        btn.classList.add('ready');
+        toast('A new build is ready — open the menu and tap Update now.', 5000);
+      };
+      const watch = worker => {
+        if (!worker) return;
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) offer(worker);
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) offer(worker);
+        });
+      };
+      if (reg.waiting) offer(reg.waiting);
+      watch(reg.installing);
+      reg.addEventListener('updatefound', () => watch(reg.installing));
       reg.update().catch(() => {});
       // Resuming an iOS home-screen app doesn't navigate, so nothing would
       // otherwise check for a new build.
@@ -1614,10 +1667,17 @@ function registerSW() {
         if (!document.hidden) reg.update().catch(() => {});
       });
       $('forceUpdate').addEventListener('click', async () => {
+        const take = pending || reg.waiting;
+        if (take) {
+          if (round && (decks.A.playing || decks.B.playing)) { toast('Stop the decks first — updating reloads the app.'); return; }
+          toast('Updating…');
+          reloadOnTakeover = true;
+          take.postMessage('skipWaiting');
+          return;
+        }
         try {
           await reg.update();
-          const waiting = reg.waiting || reg.installing;
-          if (waiting) { toast('New build found — reloading…'); waiting.postMessage('skipWaiting'); }
+          if (reg.waiting || reg.installing) toast('Found a new build — it will be ready in a moment.');
           else toast(`You're on the latest build (${APP_BUILD}).`);
         } catch { toast('Could not reach the network to check.'); }
       });
