@@ -18,9 +18,10 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   meters let you watch the kicks line up and match by eye.
 - Since 2026-09-20 there is a "Visual aids" setting (Beatmatch PRO parity,
   owner's decision, default OFF, persisted as 'aids'): level meters, scrolling
-  waveforms with the beat grid, each track's TAGGED BPM (never deck B's
-  effective tempo — that would print the hidden offset), and a %/★ score on the
-  reveal (approximation: 100 − 20/BPM, 5★ under 0.5 BPM; the real formula is
+  waveforms with the beat grid, and a %/★ score on the reveal. NO BPM IS SHOWN
+  DURING PLAY, not even the tagged one — the owner had it removed on 2026-09-22:
+  deck 1's BPM plus the two pitch readouts lets you calculate the answer rather
+  than hear it. Don't reintroduce a tempo number on the mixer screen (approximation: 100 − 20/BPM, 5★ under 0.5 BPM; the real formula is
   not public). Off means off: setAids(false) detaches the analysers and stops
   the rAF loop — verified by tools/harness/tests/aids.html. The aids loop is
   separate from fader painting, which stays synchronous.

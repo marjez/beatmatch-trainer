@@ -14,7 +14,7 @@
 <!-- ?v= is the build stamp: Safari kept a cached app.js across reloads on the
      phone, and a versioned URL is the only reload-proof way to invalidate it.
      Bump alongside APP_BUILD and the sw.js CACHE. -->
-<link rel="stylesheet" href="css/app.css?v=bmt-v20">
+<link rel="stylesheet" href="css/app.css?v=bmt-v21">
 </head>
 <body>
 <div class="app">
@@ -147,7 +147,7 @@
           <button data-aids="on">Visual aids</button>
         </div>
       </div>
-      <div class="setting-hint">Visual aids adds what Beatmatch PRO puts on screen: level meters, scrolling waveforms, each track's BPM, and a score out of 100 with stars on the reveal. Ears only is the honest default — with meters and waveforms you can line the kicks up by eye.</div>
+      <div class="setting-hint">Visual aids adds what Beatmatch PRO puts on screen: level meters, scrolling waveforms with the beat grid, and a score out of 100 with stars on the reveal. No BPM is ever shown while you play — a number to read is a match you didn't hear. Ears only is the honest default: with meters and waveforms you can line the kicks up by eye.</div>
       <div class="settings-row" style="margin-top:8px;">
         <div class="seg" id="splitSeg">
           <button data-split="off" class="on">Both centred</button>
@@ -224,6 +224,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=bmt-v20"></script>
+<script type="module" src="js/app.js?v=bmt-v21"></script>
 </body>
 </html>

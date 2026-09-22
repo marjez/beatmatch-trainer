@@ -38,6 +38,11 @@ try {
   if (!R.on.analyserA || !R.on.analyserB || R.on.waveHidden) fail('aids on did not attach', R.on);
   if (R.on.meterDistinctValues < 3) fail('meter not moving', R.on);
   if (R.on.waveLitPixels < 200) fail('waveform blank', R.on);
+  // No tempo number anywhere on the mixer while aids are on: the waveform must
+  // not print a BPM, and the only readouts are the two pitch percentages.
+  const onScreen = [...app.d.querySelectorAll('.decks *')].map(e => e.childElementCount ? '' : e.textContent).join(' ');
+  R.on.mixerText = onScreen.replace(/\s+/g, ' ').trim();
+  if (/bpm/i.test(R.on.mixerText)) fail('BPM text on the mixer with aids on', R.on.mixerText);
   if (R.on.rafCallsIn500ms < 20) fail('animation loop not running with aids on', R.on);
   if (R.on.dragCostMs.median > 1.5) fail('fader got expensive with aids on', R.on);
   // Reveal shows the parity line only with aids on
