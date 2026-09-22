@@ -376,6 +376,19 @@ function renderCredits() {
 
 function renderLibrary() {
   renderCredits();
+  // A rebuild destroys the <input> you are typing in — the keyboard drops and
+  // the value reverts. The demo crate re-renders after every one of its 16
+  // downloads, so this was easy to hit. Defer until the field is left.
+  if (trackList.contains(document.activeElement)) {
+    if (!renderLibrary._pending) {
+      renderLibrary._pending = true;
+      document.activeElement.addEventListener('blur', () => {
+        renderLibrary._pending = false;
+        renderLibrary();
+      }, { once: true });
+    }
+    return;
+  }
   // Detection is opt-in: it full-decodes a track (~144 MB) to analyse it, so it
   // must never run unprompted at startup on a phone.
   const untagged = tracks.filter(t => !t.bpm).length;
@@ -423,7 +436,15 @@ function renderLibrary() {
     del.addEventListener('click', async () => {
       await db.deleteTrack(t.id);
       tracks = tracks.filter(x => x.id !== t.id);
-      if (round && (round.aId === t.id || round.bId === t.id)) { round = null; stopDeck('A'); stopDeck('B'); }
+      if (round && (round.aId === t.id || round.bId === t.id)) {
+        round = null; stopDeck('A'); stopDeck('B');
+        // Otherwise both decks sat armed with the deleted audio still pooled,
+        // Play and Cue silently did nothing, and nothing said to deal again.
+        for (const id of DECKS) { decks[id].ready = false; decks[id].buffer = null; }
+        updateTransport();
+        if (canStart()) startRound();
+        else toast('That track was on a deck — add another pair to keep going.');
+      }
       renderLibrary(); updateButtons();
     });
     row.appendChild(name); row.appendChild(bpm); row.appendChild(del);
@@ -475,6 +496,7 @@ function canStart() {
 // "quarter of the way in" guess.
 const BEATS_PER_PHRASE = 16;   // 4 bars of 4/4
 function phraseStart(track, duration) {
+  return 0;
   const target = duration > 90 ? Math.min(30, duration * 0.25) : 0;
   if (typeof track?.anchor !== 'number' || !track?.bpm) return target;
   const phrase = BEATS_PER_PHRASE * (60 / track.bpm);
@@ -550,16 +572,18 @@ function rateFor(id) {
 }
 // Score is the RELATIVE tempo error between the decks, so moving either fader
 // counts. Nudge is excluded: it is a momentary bend, not part of your answer.
-function currentErrorPct() {
-  const a = 1 + decks.A.fader / 100;
-  const b = (1 + round.hidden / 100) * (1 + decks.B.fader / 100);
+function currentErrorPct(from) {
+  const at = from || { hidden: round.hidden, faderA: decks.A.fader, faderB: decks.B.fader };
+  const a = 1 + at.faderA / 100;
+  const b = (1 + at.hidden / 100) * (1 + at.faderB / 100);
   return (b / a - 1) * 100;
 }
 // The BPM the pair is actually running at, which is what the error is measured
 // against — deck A's tag scaled by wherever its own fader is sitting.
-function effectiveBpmA() {
-  const tagged = round?.bpmA;          // as dealt, not as currently edited
-  return tagged ? tagged * (1 + decks.A.fader / 100) : null;
+function effectiveBpmA(at) {
+  const tagged = at?.bpmA ?? round?.bpmA;   // as dealt, not as currently edited
+  const faderA = at?.faderA ?? decks.A.fader;
+  return tagged ? tagged * (1 + faderA / 100) : null;
 }
 
 // ---------- Playback ----------
@@ -1160,7 +1184,13 @@ function bindFader(track, knob, { get, set, fine = false, onFine = null, axis = 
   const along = e => vertical ? e.clientY : e.clientX;
   const across = e => vertical ? e.clientX : e.clientY;
 
+  let ownerId = null;
   track.addEventListener('pointerdown', e => {
+    // One finger owns a fader: a second touch inside the knob used to
+    // re-anchor the drag, and then both fingers fed one integrator (measured
+    // 0.93 → 1.23 → 0.62 → 1.54 …), with the first lift ending the drag while
+    // the second finger was still down.
+    if (dragging) return;
     // Geometry read once per drag; reading per move forces a layout a frame.
     const rect = track.getBoundingClientRect();
     const kh = vertical ? knob.offsetHeight : knob.offsetWidth;
@@ -1169,6 +1199,7 @@ function bindFader(track, knob, { get, set, fine = false, onFine = null, axis = 
     const p = along(e) - (vertical ? rect.top : rect.left);
     if (p < knobStart - GRAB_SLOP || p > knobStart + kh + GRAB_SLOP) return;   // missed it
     dragging = true;
+    ownerId = e.pointerId;
     try { track.setPointerCapture(e.pointerId); } catch {}
     box = { usable, startAcross: across(e) };
     grabOffset = p - knobStart;    // keeps the knob where you took hold of it
@@ -1179,7 +1210,7 @@ function bindFader(track, knob, { get, set, fine = false, onFine = null, axis = 
   });
 
   track.addEventListener('pointermove', e => {
-    if (!dragging || !box) return;
+    if (!dragging || !box || e.pointerId !== ownerId) return;
     const t0 = performance.now();
     pendingFine = fine ? fineFactor(across(e) - box.startAcross) : 1;
     // At full sensitivity the virtual position tracks the finger exactly, so
@@ -1197,9 +1228,9 @@ function bindFader(track, knob, { get, set, fine = false, onFine = null, axis = 
     dragProfiler.sample(performance.now() - t0);
   });
 
-  const end = () => {
-    if (!dragging) return;
-    dragging = false; box = null;
+  const end = e => {
+    if (!dragging || (e && e.pointerId !== ownerId)) return;
+    dragging = false; box = null; ownerId = null;
     knob.classList.remove('grabbed');
     if (onFine) onFine(1);
     dragProfiler.finish();
@@ -1265,18 +1296,22 @@ revealBtn.addEventListener('click', async () => {
   if (!round || revealing) return;
   revealing = true;                 // the IDB write below is awaited; a double tap must not save twice
   stopDeck('A'); stopDeck('B');
-  const err = currentErrorPct();
+  // Everything the card shows is snapshotted BEFORE the awaited IDB write: the
+  // mixer is still live during it, and dealing a new pair inside that window
+  // printed the NEXT round's hidden offset on the card.
+  const shown = { ...round, faderA: decks.A.fader, faderB: decks.B.fader };
+  const err = currentErrorPct(shown);
   const absErr = Math.abs(err);
-  const a = tracks.find(t => t.id === round.aId), b = tracks.find(t => t.id === round.bId);
+  const a = tracks.find(t => t.id === shown.aId), b = tracks.find(t => t.id === shown.bId);
   // Measured against the tempo the pair was actually running at: deck 1's tag
   // scaled by its own fader, since that fader is live now too.
-  const bpmA = effectiveBpmA();
+  const bpmA = effectiveBpmA(shown);
   const errBpm = bpmA ? bpmA * err / 100 : null;
   const absBpm = errBpm !== null ? Math.abs(errBpm) : null;
   sessionHistory.push({ err, errBpm });
-  await db.saveRound({ err, errBpm, mode, difficulty: round.difficulty, pitchRange: round.pitchRange,
-                       aids: round.aids || aids,   // an aided round is not an eared one
-                       faderA: decks.A.fader, faderB: decks.B.fader,
+  await db.saveRound({ err, errBpm, mode, difficulty: shown.difficulty, pitchRange: shown.pitchRange,
+                       aids: shown.aids || aids,   // an aided round is not an eared one
+                       faderA: shown.faderA, faderB: shown.faderB,
                        aName: a?.name, bName: b?.name }).catch(() => {});
   const sEl = $('revealScore');
   if (absBpm !== null) {
@@ -1298,13 +1333,13 @@ revealBtn.addEventListener('click', async () => {
   const sign = v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
   // With both faders live the answer is a relationship, not a single position:
   // deck 2 has to sit wherever cancels the hidden offset relative to deck 1.
-  const correctB = ((1 + decks.A.fader / 100) / (1 + round.hidden / 100) - 1) * 100;
+  const correctB = ((1 + shown.faderA / 100) / (1 + shown.hidden / 100) - 1) * 100;
   const lockNote = (absBpm !== null ? absBpm <= 0.05 : absErr <= 0.05);
   $('revealDetail').innerHTML =
     `<span>Deck 2 was</span> ${lockNote ? '<span>locked in</span>' : `running ${dir}`} ` +
     (absBpm !== null ? `<span>(${absErr.toFixed(2)}% at ${bpmA.toFixed(2)} BPM)</span>` : '') + ` ·
-     <span>hidden offset</span> ${sign(round.hidden)}% ·
-     <span>your faders</span> 1: ${sign(decks.A.fader)}% / 2: ${sign(decks.B.fader)}% ·
+     <span>hidden offset</span> ${sign(shown.hidden)}% ·
+     <span>your faders</span> 1: ${sign(shown.faderA)}% / 2: ${sign(shown.faderB)}% ·
      <span>deck 2 needed</span> ${sign(correctB)}%`;
   const row = $('strobeRow');
   row.innerHTML = '';
@@ -1493,10 +1528,14 @@ $('statsTableBtn').addEventListener('click', () => {
 });
 
 // ---------- Settings ----------
+function setDifficulty(v) {
+  difficulty = v === 'hard' ? 'hard' : 'easy';
+  [...$('diffSeg').children].forEach(b => b.classList.toggle('on', b.dataset.diff === difficulty));
+}
 $('diffSeg').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn) return;
-  difficulty = btn.dataset.diff;
-  [...$('diffSeg').children].forEach(b => b.classList.toggle('on', b === btn));
+  setDifficulty(btn.dataset.diff);
+  db.setSetting('difficulty', difficulty).catch(() => {});   // a mode, not a per-launch reset
 });
 $('aidsSeg').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn) return;
@@ -1590,11 +1629,19 @@ function registerSW() {
 // Read-only handles for tools/harness: the browser tests tap the master bus to
 // measure press-to-sound and beat alignment against the audio clock. Nothing in
 // the app reads this.
-window.__bmt = {
-  get ctx() { return ctx; }, get master() { return master; }, get round() { return round; },
-  get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
-  decks, rateFor, phraseStart, deckGain, parityScore,
-};
+// Localhost only. The hook handed out the LIVE round object, so one line in a
+// console — __bmt.round.hidden = 0 — bought a perfect score. The offset has to
+// live client-side, so a determined cheat is always possible with a debugger;
+// a named, writable global is a different thing, and there is no reason for it
+// to exist on the deployed app at all.
+if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
+  window.__bmt = {
+    get ctx() { return ctx; }, get master() { return master; },
+    get round() { return round && { ...round }; },            // copy: writes must not reach the round
+    get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
+    decks, rateFor, phraseStart, deckGain, parityScore,
+  };
+}
 
 // ---------- Init ----------
 async function init() {
@@ -1602,6 +1649,7 @@ async function init() {
   try { setSplit(await db.getSetting('split', false)); } catch {}
   try { setBeatFocus(await db.getSetting('beatFocus', false)); } catch {}
   try { setAids(await db.getSetting('aids', false) === true); } catch {}
+  try { setDifficulty(await db.getSetting('difficulty', 'easy')); } catch {}
   try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
   catch { setPitchRange(BASE_RANGE); }
   try { const x = await db.getSetting('xfade', 0.5); if (typeof x === 'number' && x >= 0 && x <= 1) xfade = x; } catch {}
