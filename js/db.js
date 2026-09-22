@@ -62,10 +62,10 @@ export async function deleteTrack(id) {
   return tx(db, 'tracks', 'readwrite', s => s.delete(id));
 }
 
-export async function saveRound({ err, errBpm, mode, difficulty, pitchRange, faderA, faderB, aName, bName }) {
+export async function saveRound({ err, errBpm, mode, difficulty, pitchRange, aids = false, faderA, faderB, aName, bName }) {
   const db = await openDB();
   return tx(db, 'rounds', 'readwrite', s =>
-    s.add({ err, errBpm, mode, difficulty, pitchRange, faderA, faderB, aName, bName, at: Date.now() }));
+    s.add({ err, errBpm, mode, difficulty, pitchRange, aids, faderA, faderB, aName, bName, at: Date.now() }));
 }
 
 export async function getRounds(limit = 500) {

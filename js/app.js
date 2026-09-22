@@ -525,7 +525,11 @@ function startRound(keepPair = false) {
     hidden = pickHidden();
     needed = (1 / (1 + hidden / 100) - 1) * 100;
   } while (Math.abs(needed) > pitchRange - 0.5);
-  round = { aId: a.id, bId: b.id, hidden, r0 };
+  // Snapshot the terms of the round. difficulty, pitchRange and deck 1's tag
+  // were read at REVEAL, so switching Mode or ×2 mid-round relabelled the
+  // record, and editing deck 1's BPM in the crate rescaled the score (set it
+  // to 60 and a 0.10 BPM miss reports 0.047 — green).
+  round = { aId: a.id, bId: b.id, hidden, r0, difficulty, pitchRange, bpmA: a.bpm, aids };
   for (const id of DECKS) {
     const d = decks[id];
     d.fader = 0; d.nudge = 0; d.rate = 1; d.cuePoint = 0; d.previewing = false;
@@ -553,8 +557,9 @@ function currentErrorPct() {
 }
 // The BPM the pair is actually running at, which is what the error is measured
 // against — deck A's tag scaled by wherever its own fader is sitting.
-function effectiveBpmA(track) {
-  return track?.bpm ? track.bpm * (1 + decks.A.fader / 100) : null;
+function effectiveBpmA() {
+  const tagged = round?.bpmA;          // as dealt, not as currently edited
+  return tagged ? tagged * (1 + decks.A.fader / 100) : null;
 }
 
 // ---------- Playback ----------
@@ -1265,11 +1270,12 @@ revealBtn.addEventListener('click', async () => {
   const a = tracks.find(t => t.id === round.aId), b = tracks.find(t => t.id === round.bId);
   // Measured against the tempo the pair was actually running at: deck 1's tag
   // scaled by its own fader, since that fader is live now too.
-  const bpmA = effectiveBpmA(a);
+  const bpmA = effectiveBpmA();
   const errBpm = bpmA ? bpmA * err / 100 : null;
   const absBpm = errBpm !== null ? Math.abs(errBpm) : null;
   sessionHistory.push({ err, errBpm });
-  await db.saveRound({ err, errBpm, mode, difficulty, pitchRange,
+  await db.saveRound({ err, errBpm, mode, difficulty: round.difficulty, pitchRange: round.pitchRange,
+                       aids: round.aids || aids,   // an aided round is not an eared one
                        faderA: decks.A.fader, faderB: decks.B.fader,
                        aName: a?.name, bName: b?.name }).catch(() => {});
   const sEl = $('revealScore');
@@ -1353,6 +1359,7 @@ async function renderHistory() {
 // ink is the trend. Difficulty is a filter, not a second series. Everything
 // is plain SVG built here; no chart library, in keeping with no dependencies.
 let statsFilter = 'all';
+let statsAided = false;         // include rounds played with visual aids
 let statsAsTable = false;
 let statsRows = [];
 const bandOf = abs => abs <= 0.05 ? 'good' : abs <= 0.3 ? 'mid' : 'bad';
@@ -1370,7 +1377,16 @@ async function renderStats() {
   panel.style.display = all.length ? 'block' : 'none';
   if (!all.length) return;
   statsRows = all;
-  const rows = statsFilter === 'all' ? all : all.filter(r => r.difficulty === statsFilter);
+  // Rounds played with visual aids are not ear training and would flatter the
+  // trend, so they are excluded unless you ask for them.
+  const byDiff = statsFilter === 'all' ? all : all.filter(r => r.difficulty === statsFilter);
+  const aided = byDiff.filter(r => r.aids).length;
+  const rows = statsAided ? byDiff : byDiff.filter(r => !r.aids);
+  $('statsAidedNote').textContent = aided
+    ? `${aided} round${aided > 1 ? 's' : ''} played with visual aids ${statsAided ? 'included' : 'excluded'}.`
+    : '';
+  $('statsAidedBtn').style.display = aided ? 'block' : 'none';
+  $('statsAidedBtn').textContent = statsAided ? 'Exclude aided rounds' : 'Include aided rounds';
   const abs = rows.map(r => Math.abs(r.errBpm));
   $('kpiRounds').textContent = String(rows.length);
   $('kpiBest').textContent = abs.length ? Math.min(...abs).toFixed(2) : '—';
@@ -1469,6 +1485,7 @@ $('statsSeg').addEventListener('click', e => {
   [...$('statsSeg').children].forEach(b => b.classList.toggle('on', b === btn));
   renderStats();
 });
+$('statsAidedBtn').addEventListener('click', () => { statsAided = !statsAided; renderStats(); });
 $('statsTableBtn').addEventListener('click', () => {
   statsAsTable = !statsAsTable;
   $('statsTableBtn').setAttribute('aria-pressed', String(statsAsTable));
