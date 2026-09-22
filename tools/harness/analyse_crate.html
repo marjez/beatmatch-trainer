@@ -20,18 +20,33 @@ try {
     let bpm0 = null;
     try { const r = await guess(buf, offset, Math.min(60, dur - offset), { minTempo: 80, maxTempo: 159 }); bpm0 = typeof r === 'number' ? r : (r?.bpm ?? r?.tempo); } catch {}
     // Low-band onset envelope at 1 ms resolution over the analysed span.
-    const span = Math.min(150, dur - 5), n = Math.floor(span * sr);
-    const oc = new OfflineAudioContext(1, n, sr);
-    const src = oc.createBufferSource(); src.buffer = buf;
-    const lp = oc.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150; lp.Q.value = 0.9;
-    src.connect(lp); lp.connect(oc.destination); src.start(0);
-    const low = (await oc.startRendering()).getChannelData(0);
+    // The whole track (capped), not the first 150 s: a slow builder's first
+    // sustained phrase can be minutes in, and a track with no cue at all falls
+    // back to the app's blind 30 s guess.
+    const span = Math.min(420, dur - 5), n = Math.floor(span * sr);
     const frame = Math.round(sr / 1000), frames = Math.floor(n / frame);
     const frameS = frame / sr;               // NOT 1 ms: 44/44100 s; converting back with 1 ms biased BPM by 0.23%
-    const env = new Float32Array(frames);
-    for (let i = 0; i < frames; i++) { let e = 0; for (let k = 0; k < frame; k++) { const v = low[i * frame + k]; e += v * v; } env[i] = Math.sqrt(e / frame); }
-    const onset = new Float32Array(frames);
-    for (let i = 1; i < frames; i++) onset[i] = Math.max(0, env[i] - env[i - 1]);
+    // Two onset envelopes: the kick band, and everything. A sidechained or soft
+    // kick barely moves the low band while the beat is plainly running — two of
+    // sixteen demo tracks found no drop-in point at all on the low band alone.
+    const envelope = async (filter) => {
+      const oc = new OfflineAudioContext(1, n, sr);
+      const src = oc.createBufferSource(); src.buffer = buf;
+      let tail = src;
+      if (filter) { const f = oc.createBiquadFilter(); f.type = filter.type; f.frequency.value = filter.hz; f.Q.value = 0.9; src.connect(f); tail = f; }
+      tail.connect(oc.destination); src.start(0);
+      const d = (await oc.startRendering()).getChannelData(0);
+      const env = new Float32Array(frames);
+      for (let i = 0; i < frames; i++) { let e = 0; for (let k = 0; k < frame; k++) { const v = d[i * frame + k]; e += v * v; } env[i] = Math.sqrt(e / frame); }
+      const on = new Float32Array(frames);
+      for (let i = 1; i < frames; i++) on[i] = Math.max(0, env[i] - env[i - 1]);
+      let peak = 0; for (let i = 0; i < frames; i++) if (on[i] > peak) peak = on[i];
+      if (peak > 0) for (let i = 0; i < frames; i++) on[i] /= peak;      // normalised, so the two are comparable
+      return on;
+    };
+    const onsetLow = await envelope({ type: 'lowpass', hz: 150 });
+    const onsetAll = await envelope(null);
+    const onset = onsetLow;                  // the grid fit still follows the kick
     // Grid fit: period in ms around the detector's guess, ±1.5%, best phase per period.
     const fit = (bpmGuess) => {
       let best = { score: -1 };
@@ -56,19 +71,38 @@ try {
     let dbBest = { s: -1, k: 0 };
     for (let k = 0; k < 4; k++) { let s = 0, c = 0; for (let b = k; b < best.beats; b += 4) { s += onset[Math.round(best.ph + b * best.p)]; c++; } if (c && s / c > dbBest.s) dbBest = { s: s / c, k }; }
     const anchor = +((best.ph + dbBest.k * best.p) * frameS).toFixed(4);
-    // Where the beat is actually established: the first 4-bar phrase (from the
-    // downbeat) in which at least 12 of 16 grid beats carry a real onset. The
-    // app can start there instead of 30 s into a beatless intro.
+    // Drop-in points. "Where the kick first appears" was not enough — a track
+    // can open with one hit and then a pad, and a phrase that merely starts
+    // with a beat can be the last phrase before a breakdown. A drop-in point
+    // is a PHRASE BOUNDARY from which the beat RUNS for at least SUSTAIN_BARS
+    // bars: ≥80% of those beats carry an onset. Every such phrase is emitted,
+    // so the app can pick the first one at or after its target rather than
+    // landing in an intro or a breakdown. kickIn is the first of them.
+    const SUSTAIN_BARS = 8;
+    const cues = [];
     let kickIn = null;
     {
-      const strong = []; for (let b = dbBest.k; b < best.beats; b++) strong.push(onset[Math.round(best.ph + b * best.p)]);
-      const sorted = [...strong].sort((a, b) => a - b), ref = sorted[Math.floor(sorted.length * 0.5)] || 0;
-      for (let ph = 0; ph + 16 <= strong.length; ph += 16) {
-        let hits = 0; for (let b = 0; b < 16; b++) if (strong[ph + b] > ref * 0.4) hits++;
-        if (hits >= 12) { kickIn = +((best.ph + (dbBest.k + ph) * best.p) * frameS).toFixed(3); break; }
+      // A beat counts as active if EITHER band says so.
+      const act = src => {
+        const at = []; for (let b = dbBest.k; b < best.beats; b++) at.push(src[Math.round(best.ph + b * best.p)]);
+        const sorted = [...at].sort((a, b) => a - b), ref = sorted[Math.floor(sorted.length * 0.5)] || 0;
+        return at.map(v => v > ref * 0.4);
+      };
+      const aLow = act(onsetLow), aAll = act(onsetAll);
+      const active = aLow.map((v, i) => v || aAll[i]);
+      const strong = active;
+      const need = SUSTAIN_BARS * 4;
+      for (let ph = 0; ph + need <= active.length; ph += 16) {
+        let hits = 0; for (let b = 0; b < need; b++) if (active[ph + b]) hits++;
+        if (hits >= need * 0.8) {
+          const t = +((best.ph + (dbBest.k + ph) * best.p) * frameS).toFixed(3);
+          if (kickIn === null) kickIn = t;
+          // One candidate per region is plenty; keep them ~16 bars apart.
+          if (!cues.length || t - cues[cues.length - 1] > 16 * 4 * best.p * frameS) cues.push(t);
+        }
       }
     }
-    const rec = { file: f, duration: +dur.toFixed(1), bpmDetector: bpm0 && +bpm0.toFixed(2), bpm, anchor, kickIn, confidence: +(best.score / (mean || 1)).toFixed(2) };
+    const rec = { file: f, duration: +dur.toFixed(1), bpmDetector: bpm0 && +bpm0.toFixed(2), bpm, anchor, kickIn, cues, confidence: +(best.score / (mean || 1)).toFixed(2) };
     out.push(rec); log(JSON.stringify(rec));
   }
   await post(out);

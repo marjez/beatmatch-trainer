@@ -1,0 +1,50 @@
+<!doctype html><meta charset=utf-8><title>startpoint</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Does a deck start where the beat is RUNNING? "Is there a kick at t=0" was
+// not enough — a track can open with one hit and then a pad, and a phrase can
+// be the last one before a breakdown. This counts kicks over the first 8
+// seconds of every track in the crate and compares with the beats the tempo
+// says should be there.
+import { post, sleep, bootApp, loadCrate, waitReady, tapMaster, pev, waitFor } from './lib.js';
+const R = { tracks: [], failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+try {
+  const app = await bootApp(); await loadCrate(app); await waitReady(app);
+  const { w, g, bmt } = app; const ctx = bmt.ctx;
+  pev(w, g('playA'), 'pointerdown'); await sleep(50); pev(w, g('playA'), 'pointerdown'); await sleep(100);
+  const rec = await tapMaster(app);
+  const SPAN = 8;
+  const seen = new Set();
+  for (let n = 0; n < 60 && seen.size < bmt.tracks.length; n++) {
+    g('newPairBtn').click(); await waitReady(app);
+    for (const id of ['A', 'B']) {
+      const tr = bmt.tracks.find(t => t.id === (id === 'A' ? bmt.round.aId : bmt.round.bId));
+      if (seen.has(tr.name)) continue; seen.add(tr.name);
+      bmt.decks[id].offset = 0; rec.clear(); await sleep(80);
+      pev(w, g('play' + id), 'pointerdown');
+      const sched = bmt.decks[id].mark;
+      await sleep(SPAN * 1000 + 300); await rec.settle(sched + SPAN);
+      const rate = bmt.rateFor(id);
+      const expected = Math.floor(SPAN / (60 / tr.bpm / rate));
+      // Onsets across the span, counted against a threshold relative to this
+      // track's own loudest moment in the window (masters vary a lot).
+      const peak = rec.peak(sched, sched + SPAN);
+      const hits = rec.onsets(sched, sched + SPAN, Math.max(0.05, peak * 0.45)).length;
+      const rec1 = { track: tr.name.slice(0, 34), start: +bmt.phraseStart(tr, 600).toFixed(1), bpm: tr.bpm,
+                     expectedBeats: expected, kicksIn8s: hits, ratio: +(hits / expected).toFixed(2), peak: +peak.toFixed(3) };
+      R.tracks.push(rec1);
+      // Four-to-the-floor is one kick per beat; half that means the beat is not
+      // running (pad, breakdown, intro).
+      if (hits < expected * 0.5) fail('starts where the beat is not running', rec1);
+      pev(w, g('play' + id), 'pointerdown'); await sleep(120);
+    }
+  }
+  R.covered = seen.size;
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  rec.disconnect();
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>

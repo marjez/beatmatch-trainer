@@ -59,14 +59,17 @@ try {
   const per = ons2.slice(1).map((t, i) => (t - ons2[i]) * 1000);
   const expect = 60 / track('A').bpm / bmt.rateFor('A') * 1000;
   R.ride.beatPeriodAfterMs = stats(per); R.ride.expectedPeriodMs = +expect.toFixed(2);
-  if (per.length && Math.abs(stats(per).median - expect) > 0.5) fail('beat period does not follow the fader', R.ride);
+  // 1.5 ms, not 0.5: the onset detector places a kick by an envelope threshold
+  // crossing, which carries its own ±0.5 ms. A real tempo error shows up as
+  // tens of ms over this many beats.
+  if (per.length && Math.abs(stats(per).median - expect) > 1.5) fail('beat period does not follow the fader', R.ride);
 
   // ---- Nudge ----
   const rateBefore = bmt.rateFor('A');
   pev(w, g('nudgeUpA'), 'pointerdown');
   const rateHeld = bmt.rateFor('A');
-  await sleep(1500);
-  const tN0 = ctx.currentTime - 1.2, tN1 = ctx.currentTime;
+  await sleep(3000);                       // long enough for several beats: one
+  const tN0 = ctx.currentTime - 2.7, tN1 = ctx.currentTime;   // interval alone carries the detector's own ±0.5 ms
   pev(w, g('nudgeUpA'), 'pointerup');
   const rateAfter = bmt.rateFor('A');
   await sleep(200); await rec.settle(tN1);
@@ -77,7 +80,8 @@ try {
               periodHeldMs: stats(perN), expectedHeldMs: +expectN.toFixed(2), readoutHeld: null };
   if (Math.abs(rateHeld / rateBefore - 1.02) > 1e-9) fail('nudge is not +2%', R.nudge);
   if (rateAfter !== rateBefore) fail('nudge did not snap back', R.nudge);
-  if (perN.length && Math.abs(stats(perN).median - expectN) > 0.5) fail('beat period under nudge', R.nudge);
+  if (perN.length < 2) fail('not enough beats measured under nudge', R.nudge);
+  else if (Math.abs(stats(perN).median - expectN) > 1.5) fail('beat period under nudge', R.nudge);   // same ±0.5 ms floor
 
   // ---- Stop / resume position ----
   const d = bmt.decks.A;

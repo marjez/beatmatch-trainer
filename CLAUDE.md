@@ -65,6 +65,14 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   where the beat actually is. Cues before the target are ignored, and so are
   cues past 60% of the track or with under 90 s left — Rekordbox exports every
   position mark, mix-out cues included.
+  For the demo crate, analyse_crate.html emits a cue for EVERY 4-bar phrase
+  boundary from which the beat runs 8 bars (≥80% of beats carry an onset in
+  either the kick band or broadband — a sidechained kick is invisible to the
+  low band alone). "First kick" was not enough: v21 still started some decks in
+  an intro, because a track can open with one hit and then a pad, and a phrase
+  can be the last one before a breakdown. tools/harness/tests/startpoint.html
+  is the check — it counts kicks over 8 s against the beats the tempo predicts,
+  for every track in the crate.
 
 ## Transport: start on the press, at the downbeat (decided 2026-09-20)
 The owner's priority is CDJ-class response on the per-deck Play and Cue: the

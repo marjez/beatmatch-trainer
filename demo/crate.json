@@ -1,7 +1,7 @@
 {
  "version": 1,
  "playlist": "Demo crate",
- "note": "Creative Commons BY tracks from netlabels on the Internet Archive. Audio is fetched from archive.org when you load the demo crate and stored on your device; nothing is bundled. BPM, beat grid and the 'kick in' cue were analysed with tools/harness/analyse_crate.html (integer tempos, DAW-produced); the downbeat choice within the bar is best-effort.",
+ "note": "Creative Commons BY tracks from netlabels on the Internet Archive. Audio is fetched from archive.org when you load the demo crate and stored on your device; nothing is bundled. BPM, beat grid and the drop-in cues were analysed with tools/harness/analyse_crate.html: each cue is a 4-bar phrase boundary from which the beat runs for at least 8 bars, so a deck never starts in an intro or a breakdown.",
  "tracks": [
   {
    "file": "Dako Loop Orchestra - Dakophazer 120bpm.mp3",
@@ -9,9 +9,13 @@
    "bpm": 120,
    "anchor": 1.021,
    "cues": [
-    49.021
+    41.021,
+    81.021,
+    121.021,
+    161.021,
+    233.021
    ],
-   "gridConfidence": 10.48,
+   "gridConfidence": 10.6,
    "duration": 292.8,
    "artist": "Dako Loop Orchestra",
    "title": "Dakophazer",
@@ -27,9 +31,17 @@
    "bpm": 122,
    "anchor": 1.3168,
    "cues": [
-    48.53
+    87.874,
+    119.35,
+    158.694,
+    198.038,
+    229.514,
+    268.858,
+    308.202,
+    339.678,
+    379.022
    ],
-   "gridConfidence": 7.24,
+   "gridConfidence": 8.81,
    "duration": 431.9,
    "artist": "Fall Apart",
    "title": "Everyman",
@@ -43,11 +55,19 @@
    "file": "Klaus PP & Sloxxx - Aestate 120bpm.mp3",
    "url": "https://archive.org/download/unfound88/unfound88_04_-_klaus_pp_and_sloxxx_-_aestate.mp3",
    "bpm": 120,
-   "anchor": 0.5489,
+   "anchor": 0.0489,
    "cues": [
-    16.549
+    16.049,
+    56.049,
+    96.049,
+    136.049,
+    176.049,
+    216.049,
+    256.049,
+    296.049,
+    336.049
    ],
-   "gridConfidence": 8.44,
+   "gridConfidence": 8.5,
    "duration": 408.6,
    "artist": "Klaus PP & Sloxxx",
    "title": "Aestate",
@@ -61,11 +81,21 @@
    "file": "Yoma - Box 119bpm.mp3",
    "url": "https://archive.org/download/unfound88/unfound88_05_-_yoma_-_box.mp3",
    "bpm": 119,
-   "anchor": 0.5391,
+   "anchor": 1.0433,
    "cues": [
-    0.539
+    1.043,
+    33.312,
+    65.581,
+    97.85,
+    130.119,
+    162.388,
+    194.657,
+    226.926,
+    259.195,
+    299.531,
+    331.8
    ],
-   "gridConfidence": 8.24,
+   "gridConfidence": 8.52,
    "duration": 398.4,
    "artist": "Yoma",
    "title": "Box",
@@ -79,11 +109,17 @@
    "file": "Daniel Fritz - Dimensions 125bpm.mp3",
    "url": "https://archive.org/download/unfound88/unfound88_08_-_daniel_fritz_-_dimensions.mp3",
    "bpm": 125,
-   "anchor": 1.5258,
+   "anchor": 0.0858,
    "cues": [
-    62.966
+    61.526,
+    92.246,
+    122.966,
+    184.406,
+    215.126,
+    368.726,
+    399.446
    ],
-   "gridConfidence": 10.25,
+   "gridConfidence": 8.86,
    "duration": 547.2,
    "artist": "Daniel Fritz",
    "title": "Dimensions",
@@ -99,9 +135,15 @@
    "bpm": 122,
    "anchor": 0.5716,
    "cues": [
-    32.047
+    32.047,
+    71.391,
+    142.211,
+    189.424,
+    299.588,
+    338.932,
+    370.408
    ],
-   "gridConfidence": 11.66,
+   "gridConfidence": 11.74,
    "duration": 427.8,
    "artist": "Klaus PP & Sloxxx",
    "title": "Salutem",
@@ -117,9 +159,10 @@
    "bpm": 120,
    "anchor": 0.006,
    "cues": [
-    64.006
+    112.006,
+    320.006
    ],
-   "gridConfidence": 4.99,
+   "gridConfidence": 5.43,
    "duration": 467.4,
    "artist": "Sloxxx",
    "title": "Sound One",
@@ -135,9 +178,12 @@
    "bpm": 100,
    "anchor": 1.5542,
    "cues": [
-    126.354
+    97.554,
+    145.554,
+    231.954,
+    270.354
    ],
-   "gridConfidence": 6.33,
+   "gridConfidence": 5.48,
    "duration": 336.1,
    "artist": "Mika Technika",
    "title": "D.M.D",
@@ -153,9 +199,16 @@
    "bpm": 128,
    "anchor": 0.2305,
    "cues": [
-    60.23
+    75.23,
+    142.73,
+    180.23,
+    217.73,
+    285.23,
+    322.73,
+    360.23,
+    397.73
    ],
-   "gridConfidence": 15.03,
+   "gridConfidence": 13.64,
    "duration": 439,
    "artist": "Artem Folevski",
    "title": "China Butique",
@@ -169,11 +222,17 @@
    "file": "Olympic Smoker - Smoked Lines 120bpm.mp3",
    "url": "https://archive.org/download/shoki005g/shoki005g-02_-_Olympic_Smoker_-_Smoked_Lines.mp3",
    "bpm": 120,
-   "anchor": 1.449,
+   "anchor": 0.949,
    "cues": [
-    25.449
+    0.949,
+    40.949,
+    80.949,
+    120.949,
+    160.949,
+    200.949,
+    240.949
    ],
-   "gridConfidence": 6.62,
+   "gridConfidence": 7.07,
    "duration": 268.2,
    "artist": "Olympic Smoker",
    "title": "Smoked Lines",
@@ -189,9 +248,17 @@
    "bpm": 128,
    "anchor": 1.502,
    "cues": [
-    1.502
+    1.502,
+    39.002,
+    84.002,
+    121.502,
+    159.002,
+    196.502,
+    241.502,
+    279.002,
+    316.502
    ],
-   "gridConfidence": 14.26,
+   "gridConfidence": 12.6,
    "duration": 350.7,
    "artist": "Mr. Dee",
    "title": "Storm",
@@ -207,9 +274,11 @@
    "bpm": 97,
    "anchor": 1.3977,
    "cues": [
+    11.295,
+    70.676,
     110.264
    ],
-   "gridConfidence": 4.39,
+   "gridConfidence": 4.35,
    "duration": 201.7,
    "artist": "Sven Laux",
    "title": "Warren Knows Them Too (Original Mix)",
@@ -225,9 +294,17 @@
    "bpm": 120,
    "anchor": 1.0619,
    "cues": [
-    1.062
+    1.062,
+    41.062,
+    81.062,
+    121.062,
+    161.062,
+    201.062,
+    241.062,
+    289.062,
+    329.062
    ],
-   "gridConfidence": 20.61,
+   "gridConfidence": 20.22,
    "duration": 372.1,
    "artist": "Sven Laux",
    "title": "Hoy & Monk (Original Mix)",
@@ -243,9 +320,14 @@
    "bpm": 122,
    "anchor": 0.0539,
    "cues": [
-    0.054
+    0.054,
+    39.398,
+    70.874,
+    110.218,
+    204.644,
+    259.726
    ],
-   "gridConfidence": 24.99,
+   "gridConfidence": 17.61,
    "duration": 324.6,
    "artist": "Sven Laux",
    "title": "Monc Another Strange Guy (Original Mix)",
@@ -261,9 +343,15 @@
    "bpm": 120,
    "anchor": 1.5249,
    "cues": [
-    33.525
+    25.525,
+    65.525,
+    105.525,
+    145.525,
+    185.525,
+    225.525,
+    265.525
    ],
-   "gridConfidence": 13.11,
+   "gridConfidence": 13.94,
    "duration": 322.1,
    "artist": "Raymundo Mendoza",
    "title": "Wrist Watch",
@@ -279,9 +367,16 @@
    "bpm": 120,
    "anchor": 1.514,
    "cues": [
-    1.514
+    1.514,
+    41.514,
+    81.514,
+    121.514,
+    161.514,
+    201.514,
+    257.514,
+    297.514
    ],
-   "gridConfidence": 24.89,
+   "gridConfidence": 21.9,
    "duration": 330.1,
    "artist": "Raymundo Mendoza",
    "title": "Toodaze",
