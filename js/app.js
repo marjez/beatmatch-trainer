@@ -127,7 +127,11 @@ function ensureMaster() {
   // way. This is what you'd do with the EQ kills on the PX5 — not a visual cue.
   const focus = c.createBiquadFilter();
   focus.type = 'lowpass';
-  focus.frequency.value = 20000;
+  // Seeded from the restored setting, not hard-coded open: init() restores
+  // beatFocus before any gesture, so the master does not exist yet and
+  // setBeatFocus's early return meant a persisted ON lit the button and
+  // filtered nothing until you toggled it off and on again.
+  focus.frequency.value = beatFocus ? BEAT_FOCUS_HZ : 20000;
   focus.Q.value = 0.7;
   const limiter = c.createDynamicsCompressor();
   limiter.threshold.value = -1.5;
@@ -296,7 +300,10 @@ fileInput.addEventListener('change', async (e) => {
   else if (gridApplied) toast(`Beat grid applied to ${gridApplied} track${gridApplied > 1 ? 's' : ''}.`);
   else if (ignored.length) toast(`Nothing added — those files aren't audio or crate.json.`);
   renderLibrary();
-  detectMissingBPMs();
+  // NO detectMissingBPMs() here. It full-decodes a track (~200 MB) and does not
+  // go through loadChain, so on an import it ran alongside the round's own
+  // decode — two full buffers at once, which is what gets the tab killed on
+  // iOS. Detection is the button in the crate panel; it always was meant to be.
   updateButtons();
   if (!round && canStart()) startRound();
 });
@@ -398,7 +405,11 @@ function renderLibrary() {
     bpm.placeholder = t.bpmSource === 'pending' ? '…' : 'BPM';
     bpm.value = t.bpm ? t.bpm : '';
     bpm.addEventListener('change', async () => {
-      const v = parseFloat(bpm.value);
+      // "133,39" on a comma-decimal keyboard parsed as 133 — silently the
+      // whole-number BPM that leaves r0 up to ~0.5 BPM out while the reveal
+      // still reports a perfect match.
+      const text = bpm.value.trim().replace(',', '.');
+      const v = /^\d+(\.\d+)?$/.test(text) ? parseFloat(text) : NaN;
       if (v >= 60 && v <= 220) {
         t.bpm = v; t.bpmSource = 'manual';
         bpm.classList.remove('detected');
@@ -779,6 +790,9 @@ function cueRelease(id) {
 
 function updateTransport() {
   kickAids();
+  // Reveal is gated on both decks being ready, and readiness changes here —
+  // without this the button stayed disabled for the whole round.
+  if (revealBtn) revealBtn.disabled = !round || !decks.A.ready || !decks.B.ready;
   for (const id of DECKS) {
     const d = decks[id];
     const btn = $('play' + id);
@@ -1289,10 +1303,13 @@ revealBtn.addEventListener('click', async () => {
   const row = $('strobeRow');
   row.innerHTML = '';
   for (let i = 0; i < 30; i++) { const dot = document.createElement('div'); dot.className = 'strobe-dot'; row.appendChild(dot); }
-  row.classList.toggle('locked', absErr <= 0.1);
-  const driftDur = absErr <= 0.02 ? 0 : Math.max(0.4, 3 / absErr);
+  // The strobe used to lock at ≤0.1 PERCENT while the headline called ≤0.05
+  // BPM good — so at 128 BPM everything from 0.05 to 0.13 BPM showed an amber
+  // "running fast" headline above a green "beat locked". One band, both.
+  row.classList.toggle('locked', lockNote);
+  const driftDur = lockNote ? 0 : Math.max(0.4, 3 / Math.max(absErr, 0.001));
   row.style.animation = driftDur ? `strobeDrift ${driftDur}s linear infinite ${err > 0 ? '' : 'reverse'}` : 'none';
-  $('strobeCaption').textContent = absErr <= 0.1 ? 'Strobe dots frozen — beat locked' : `Dots drifting ${dir} at your error rate`;
+  $('strobeCaption').textContent = lockNote ? 'Strobe dots frozen — beat locked' : `Dots drifting ${dir} at your error rate`;
   overlay.classList.add('show');
   revealing = false;
   renderHistory();
@@ -1487,7 +1504,10 @@ function setSplit(on) {
 
 function updateButtons() {
   newPairBtn.disabled = !canStart();
-  revealBtn.disabled = !round;
+  // Reveal needs a loaded pair: it was live the instant a pair was dealt, so a
+  // mis-tap wrote a round whose "error" was the whole hidden offset into a
+  // history that cannot be edited.
+  revealBtn.disabled = !round || !decks.A.ready || !decks.B.ready;
   $('dropBtn').disabled = !round;
 }
 
