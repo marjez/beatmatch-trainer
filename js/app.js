@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v22';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v23';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -15,8 +15,8 @@ let round = null;           // {aIdx, bIdx, hidden, r0}
 let split = false;          // headphone split: A hard left, B hard right
 let beatFocus = false;      // low-pass the master so only the kicks remain
 let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
-let aids = false;           // Beatmatch PRO-style visual aids: meters, waveforms, BPMs, %/stars
-// Both decks are fully live: each has its own pitch fader, nudge and level, and
+let aids = false;           // visual aids: meters, waveforms, %/★ on the reveal — never a BPM
+// Both decks are fully live: each has its own pitch fader and nudge, the
 // the score is the tempo difference BETWEEN them. offset/mark track the playhead
 // so Cue can return to the start point and Play can resume where it stopped.
 const decks = {
@@ -1013,10 +1013,10 @@ function parityScore(absBpm) {
 // times a pair genuinely needs more room; it does not change the hidden offset,
 // so rounds are no easier — it only buys headroom.
 const BASE_RANGE = 8;
-// Zero detent, like the 1210's centre click. Sized in BPM, not percent: snapping
-// home must never introduce more than DETENT_BPM of tempo error, and 0.1 BPM is
-// the accuracy being trained for. A fixed percentage can't promise that — 0.12%
-// is 0.15 BPM at 126 and 0.21 BPM at 174.
+// Zero LAMP, not a detent: nothing snaps (see CLAUDE.md — a detent you can feel
+// is one you can't be precise inside). Sized in BPM, not percent, because 0.1 BPM
+// is the accuracy being trained for and a fixed percentage can't promise that —
+// 0.12% is 0.15 BPM at 126 and 0.21 BPM at 174.
 const DETENT_BPM = 0.09;
 const FALLBACK_BPM = 128;
 function detentPct() {
@@ -1122,11 +1122,9 @@ function fineFactor(dx) {
   return 1 / (1 + d / FINE_FALLOFF);
 }
 
-// Faders drag RELATIVELY: pressing anywhere anchors, and only movement changes
-// the value. The old code jumped the value to wherever you touched, which made
-// small corrections impossible — you could never rest a thumb without throwing
-// the setting. The whole track stays grabbable, so there's no fiddly knob-sized
-// target to hit, but nothing moves until you move.
+// (The grab-the-knob model is described in full above bindFader. Two earlier
+// models — jump-to-finger and relative-from-anywhere — are documented there as
+// things not to go back to.)
 // ---------- Touch profiler ----------
 // Every latency number so far came from a desktop harness, which is not the
 // input pipeline a phone uses. This records what actually happens during a real
@@ -1620,7 +1618,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v22';
+const APP_BUILD = 'bmt-v23';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;

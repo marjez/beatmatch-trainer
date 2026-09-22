@@ -8,10 +8,11 @@ Beatmatch PRO built around your own crate.
 
 - Both decks are live, with a hidden random tempo offset on deck 2. Match them by
   ear using the ±8% pitch faders (SL-1210 range) and hold-to-nudge buttons.
-- **Drop both** starts the decks phase-locked on a single audio-clock tick. This is
-  the core of it: a tempo error is only audible as a flam, and two transients stop
-  reading as one drum beyond ~20 ms apart — so starting them separately puts you
-  outside the window where the error can be heard at all.
+- Decks are started one at a time with **Play** and **Cue**, as on CDJs or 1210s:
+  press to sound is 0.11 ms in the harness, and playback begins on a downbeat, so
+  you drop the second deck on the first one's beat by ear. **Drop both** — which
+  starts them phase-locked on one audio-clock tick — is a fallback in the settings
+  sheet.
 - **Beat focus** low-passes the mix to 220 Hz, leaving just the kick and low end,
   the way you'd use the EQ kills on a mixer to check a match.
 - **Reveal score** shows how many BPM you were out, plus a strobe-dot row that drifts
@@ -23,7 +24,13 @@ Beatmatch PRO built around your own crate.
   track, using Rekordbox's own beat grid from `crate.json` — no waiting through
   beatless intros. Cue returns the deck to that point.
 - **Fine-drag**: slide sideways while dragging a pitch fader and it gets
-  progressively finer (5× at ~120px out), enough to place it inside 0.01 BPM.
+  progressively finer — nothing for the first 36 px (a thumb moving "straight"
+  down wanders that much on its own), then ~4× finer at 120 px out, enough to
+  place it inside 0.01 BPM.
+- **Visual aids** (off by default) adds level meters and scrolling waveforms with
+  the beat grid, plus a %/★ score on the reveal. No BPM is shown while you play.
+- **Progress** in the sheet charts every round you have revealed, with the rolling
+  median; rounds played with visual aids are kept out of the trend.
 - **±8%** under the fader is the SL-1210 range. Tap it for **±16%** when a pair
   needs more room; the hidden offset is unchanged, so it adds travel, not slack.
 - **Crossfader** under the decks blends them with an equal-power curve; centre
@@ -70,7 +77,7 @@ Best path: export a practice playlist with BPMs baked into filenames.
    ```
    python tools/rekordbox_export.py rekordbox.xml "Practice Crate" "C:\Users\<you>\OneDrive\BeatmatchCrate"
    ```
-4. Let OneDrive sync → on iPhone, Files app → long-press the folder → **Download Now**.
+4. Let iCloud/OneDrive sync → on iPhone, Files app → long-press the folder → **Download Now**.
 5. In the app: **Add tracks** → browse to the folder → select all.
 
 Filenames like `Artist - Title 126.02bpm.mp3` are picked up instantly with the

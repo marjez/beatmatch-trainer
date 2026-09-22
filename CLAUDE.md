@@ -21,8 +21,10 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   waveforms with the beat grid, and a %/★ score on the reveal. NO BPM IS SHOWN
   DURING PLAY, not even the tagged one — the owner had it removed on 2026-09-22:
   deck 1's BPM plus the two pitch readouts lets you calculate the answer rather
-  than hear it. Don't reintroduce a tempo number on the mixer screen (approximation: 100 − 20/BPM, 5★ under 0.5 BPM; the real formula is
-  not public). Off means off: setAids(false) detaches the analysers and stops
+  than hear it. Don't reintroduce a tempo number on the mixer screen. The ★
+  score is an approximation (100 − 20 × |BPM off|, 5★ under 0.5 BPM); the real
+  Beatmatch PRO formula is not public.
+  Off means off: setAids(false) detaches the analysers and stops
   the rAF loop — verified by tools/harness/tests/aids.html. The aids loop is
   separate from fader painting, which stays synchronous.
 
@@ -103,7 +105,14 @@ reasons, all fixed. Don't undo any of them.
    on the other's downbeat starts in unison and any drift you hear is the
    tempo error. dropBoth() (settings sheet) starts both on one audio-clock
    tick as a fallback.
-2. THE MIX WAS CLIPPING. Two modern masters at deck gain summed to peak 1.64 and
+2. THE MIX WAS CLIPPING — and the limiter that was added for it is now GONE
+   (2026-09-22). Measured, its fixed 6 ms look-ahead was 6.0 of the 6.1 ms
+   press-to-sound, and with the equal-power crossfader, the split panner and
+   the 0.5 bus, two coherent full-scale peaks bound the master near 0.5 — some
+   5 dB under its own threshold, so it could never engage. Without it: peak
+   0.458 (0.648 at worst-case deck gain), 0% clipped, press to sound 0.11 ms.
+   The headroom that prevents clipping is the 0.5 bus; keep that.
+   The original finding, for the record: Two modern masters at deck gain summed to peak 1.64 and
    hard-clipped 0.64-1.3% of samples at the destination — and clipping lands on
    the kick transients, flattening the very attacks you listen for. The master
    bus is 0.5 with a DynamicsCompressor as a safety limiter: measured peak 0.909,
@@ -275,6 +284,16 @@ What works, and why each part is load-bearing:
   if that ever needs to run on Linux it wants an ffmpeg branch.
 - Harness numbers are not phone numbers. A desktop browser is not the input
   pipeline iOS uses; the in-app Touch diagnostics panel is the ground truth.
+
+## The harness can fail now (2026-09-22)
+browser_test.py used to exit 0 whenever a page posted anything — a test could
+report verdict FAIL and the run looked green. It exits 1 on fatal, failures,
+jsErrors, or a page with no failures list that has not declared itself
+`measurementOnly`. fader/latency/audio_chain carry thresholds instead of prose
+verdicts. Don't add a test that only prints numbers.
+Drop-in cues in demo/crate.json are verified by PLAYING them
+(tools/harness/verify_cues.html) — static analysis of the file disagreed with
+what the app actually plays, because a grid can shift within a track.
 
 ## Testing checklist before deploy
 - iPhone Safari: fader drag, nudge hold, audio plays after first tap (autoplay policy).

@@ -141,9 +141,10 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 
 /* ---- Two-channel mixer ---------------------------------------------------
    Symmetric channels, no metal texture: the plinth/platter palette carries the
-   whole thing. Deliberately no level meters — bouncing meters would let you see
-   the kicks line up and beatmatch by eye, which is the one thing this app must
-   not allow. Visual feedback lives on the reveal screen only. */
+   whole thing. No level meters BY DEFAULT — bouncing meters let you see the
+   kicks line up and beatmatch by eye. They exist only behind the opt-in
+   "Visual aids" setting, which says as much; ears-only is the default and the
+   honest one. */
 .decks {
   flex: 1; min-height: 0;
   display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px;
