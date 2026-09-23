@@ -18,6 +18,7 @@ The page should finish with:
 import http.server
 import json
 import os
+import re
 import shutil
 import socketserver
 import subprocess
@@ -69,6 +70,38 @@ def serve(directory: Path, port: int, out: Path, mounts=None, bind="127.0.0.1"):
         def end_headers(self):
             self.send_header("Cache-Control", "no-store")
             super().end_headers()
+
+        def do_GET(self):
+            # Range support: the demo crate fetches a byte window of each track
+            # rather than the whole file, and the app refuses a 200 answer to a
+            # ranged request (the grid it ships is rebased to the slice). Without
+            # this the ranged path could not be tested at all.
+            rng = self.headers.get("Range")
+            path = self.translate_path(self.path)
+            if not rng or not os.path.isfile(path):
+                return super().do_GET()
+            m = re.match(r"bytes=(\d*)-(\d*)", rng.strip())
+            if not m:
+                return super().do_GET()
+            size = os.path.getsize(path)
+            start = int(m.group(1)) if m.group(1) else 0
+            end = int(m.group(2)) if m.group(2) else size - 1
+            end = min(end, size - 1)
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            with open(path, "rb") as f:
+                f.seek(start)
+                body = f.read(end - start + 1)
+            self.send_response(206)
+            self.send_header("Content-Type", self.guess_type(path))
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            self.wfile.write(body)
 
         def do_POST(self):
             n = int(self.headers.get("Content-Length", 0))

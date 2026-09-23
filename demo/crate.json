@@ -1,194 +1,349 @@
 {
- "version": 1,
+ "version": 2,
  "playlist": "Demo crate",
- "note": "Creative Commons BY tracks from netlabels on the Internet Archive. Audio is fetched from archive.org when you load the demo crate and stored on your device; nothing is bundled. Every drop-in cue here was VERIFIED by playing it through the app and measuring the output (tools/harness/verify_cues.html): the kick band must carry more energy on the beats than between them for 8 bars, and the first kick must land on the grid. Tracks whose cues could not be verified were left out rather than shipped with a guess.",
+ "note": "Creative Commons tracks from netlabels on the Internet Archive. Nothing is bundled: each track is fetched from archive.org with a Range request for just the 220 s the app needs (the player only ever uses a 180 s window), then stored on your device. Every drop-in cue was VERIFIED by playing it through the app and measuring the output (tools/harness/verify_cues.html). byteStart/byteEnd come from tools/mp3_window.py, which walks real MP3 frame headers so the cut lands on a frame boundary. Tracks whose cues could not be verified were left out rather than shipped with a guess.",
  "tracks": [
+  {
+   "file": "Raymundo Mendoza - We Lift Off'd 115.01bpm.mp3",
+   "url": "https://archive.org/download/unfound53/unfound53_03_-_raymundo_mendoza_-_we_lift_offd.mp3",
+   "byteStart": 1642232,
+   "byteEnd": 10442552,
+   "bpm": 115.01,
+   "anchor": 0.826,
+   "cues": [
+    75.953,
+    117.69
+   ],
+   "artist": "Raymundo Mendoza",
+   "title": "We Lift Off'd",
+   "release": "translations ep [unfound53]",
+   "label": "unfound",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/unfound53"
+  },
+  {
+   "file": "Mthaza - Sparkling Winter 119bpm.mp3",
+   "url": "https://archive.org/download/unfound88/unfound88_07_-_mthaza_-_sparkling_winter.mp3",
+   "byteStart": 1258763,
+   "byteEnd": 10058894,
+   "bpm": 119,
+   "anchor": 1.8099,
+   "cues": [
+    34.079,
+    66.348
+   ],
+   "artist": "Mthaza",
+   "title": "Sparkling Winter",
+   "release": "happy in novi sad [unfound88]",
+   "label": "unfound",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://archive.org/details/unfound88"
+  },
+  {
+   "file": "Daniel Aleksandar - Evolucija u tri čina 120bpm.mp3",
+   "url": "https://archive.org/download/unfound88/unfound88_12_-_daniel_aleksandar_-_evolucija_u_tri_china.mp3",
+   "byteStart": 7945093,
+   "byteEnd": 16745224,
+   "bpm": 120,
+   "anchor": 0.0429,
+   "cues": [
+    32.043,
+    104.043
+   ],
+   "artist": "Daniel Aleksandar",
+   "title": "Evolucija u tri čina",
+   "release": "happy in novi sad [unfound88]",
+   "label": "unfound",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://archive.org/details/unfound88"
+  },
   {
    "file": "Dako Loop Orchestra - Dakophazer 120bpm.mp3",
    "url": "https://archive.org/download/unfound88/unfound88_01_-_dako_loop_orchestra_-_dakophazer.mp3",
    "bpm": 120,
-   "anchor": 1.021,
+   "anchor": 0.0289,
    "cues": [
-    81.021,
-    121.021
+    40.029,
+    80.029
    ],
-   "gridConfidence": 10.6,
-   "duration": 292.8,
    "artist": "Dako Loop Orchestra",
    "title": "Dakophazer",
    "release": "happy in novi sad [unfound88]",
    "label": "unfound",
    "license": "CC BY 4.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
-   "file": "Fall Apart - Everyman 122bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_02_-_fall_apart_-_everyman.mp3",
-   "bpm": 122,
-   "anchor": 1.3168,
-   "cues": [
-    237.382
-   ],
-   "gridConfidence": 8.81,
-   "duration": 431.9,
-   "artist": "Fall Apart",
-   "title": "Everyman",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
-   "file": "Yoma - Box 119bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_05_-_yoma_-_box.mp3",
-   "bpm": 119,
-   "anchor": 1.0433,
-   "cues": [
-    130.119,
-    162.388
-   ],
-   "gridConfidence": 8.52,
-   "duration": 398.4,
-   "artist": "Yoma",
-   "title": "Box",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
-   "file": "Daniel Fritz - Dimensions 125bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_08_-_daniel_fritz_-_dimensions.mp3",
-   "bpm": 125,
-   "anchor": 0.0858,
-   "cues": [
-    61.526,
-    184.406
-   ],
-   "gridConfidence": 8.86,
-   "duration": 547.2,
-   "artist": "Daniel Fritz",
-   "title": "Dimensions",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
-   "file": "Klaus PP & Sloxxx - Salutem 122bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_10_-_klaus_pp_and_sloxxx_-_salutem.mp3",
-   "bpm": 122,
-   "anchor": 0.5716,
-   "cues": [
-    55.654,
-    134.342
-   ],
-   "gridConfidence": 11.74,
-   "duration": 427.8,
-   "artist": "Klaus PP & Sloxxx",
-   "title": "Salutem",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
-  },
-  {
-   "file": "Mr. Dee - Storm 128bpm.mp3",
-   "url": "https://archive.org/download/shoki005g/shoki005g-03_-_Mr.Dee_-_Storm.mp3",
-   "bpm": 128,
-   "anchor": 1.502,
-   "cues": [
-    211.502
-   ],
-   "gridConfidence": 12.6,
-   "duration": 350.7,
-   "artist": "Mr. Dee",
-   "title": "Storm",
-   "release": "Grey EP [shoki005g]",
-   "label": "Shoki Recordings",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/shoki005g"
+   "page": "https://archive.org/details/unfound88",
+   "byteStart": 2865833,
+   "byteEnd": 11665964
   },
   {
    "file": "Sven Laux - Hoy & Monk (Original Mix) 120bpm.mp3",
    "url": "https://archive.org/download/miniatura031SvenLaux-HoyMonkEp/02-svenLaux-HoyMonkoriginalMix.mp3",
    "bpm": 120,
-   "anchor": 1.0619,
+   "anchor": 1.9859,
    "cues": [
-    41.062,
-    81.062
+    41.986,
+    81.986
    ],
-   "gridConfidence": 20.22,
-   "duration": 372.1,
    "artist": "Sven Laux",
    "title": "Hoy & Monk (Original Mix)",
    "release": "Hoy & Monk EP [miniatura 031]",
    "label": "Miniatura Records",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/miniatura031SvenLaux-HoyMonkEp"
-  },
-  {
-   "file": "Sven Laux - Monc Another Strange Guy (Original Mix) 122bpm.mp3",
-   "url": "https://archive.org/download/miniatura031SvenLaux-HoyMonkEp/03-svenLaux-MoncAnotherStrangeGuyoriginalMix.mp3",
-   "bpm": 122,
-   "anchor": 0.0539,
-   "cues": [
-    39.398
-   ],
-   "gridConfidence": 17.61,
-   "duration": 324.6,
-   "artist": "Sven Laux",
-   "title": "Monc Another Strange Guy (Original Mix)",
-   "release": "Hoy & Monk EP [miniatura 031]",
-   "label": "Miniatura Records",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/miniatura031SvenLaux-HoyMonkEp"
+   "page": "https://archive.org/details/miniatura031SvenLaux-HoyMonkEp",
+   "byteStart": 444061,
+   "byteEnd": 9244191
   },
   {
    "file": "Raymundo Mendoza - Wrist Watch 120bpm.mp3",
    "url": "https://archive.org/download/unfound53/unfound53_01_-_raymundo_mendoza_-_wrist_watch.mp3",
    "bpm": 120,
-   "anchor": 1.5249,
+   "anchor": 0.0279,
    "cues": [
-    41.525,
-    81.525
+    56.028,
+    96.028
    ],
-   "gridConfidence": 13.94,
-   "duration": 322.1,
    "artist": "Raymundo Mendoza",
    "title": "Wrist Watch",
    "release": "translations ep [unfound53]",
    "label": "unfound",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/unfound53"
+   "page": "https://archive.org/details/unfound53",
+   "byteStart": 1581751,
+   "byteEnd": 10381111
   },
   {
    "file": "Raymundo Mendoza - Toodaze 120bpm.mp3",
    "url": "https://archive.org/download/unfound53/unfound53_02_-_raymundo_mendoza_-_toodaze.mp3",
    "bpm": 120,
-   "anchor": 1.514,
+   "anchor": 0.0409,
    "cues": [
-    41.514,
-    81.514
+    40.041,
+    80.041
    ],
-   "gridConfidence": 21.9,
-   "duration": 330.1,
    "artist": "Raymundo Mendoza",
    "title": "Toodaze",
    "release": "translations ep [unfound53]",
    "label": "unfound",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/unfound53",
+   "byteStart": 1580787,
+   "byteEnd": 10381107
+  },
+  {
+   "file": "Raymundo Mendoza - Reaching 122bpm.mp3",
+   "url": "https://archive.org/download/unfound53/unfound53_05_-_raymundo_mendoza_-_reaching.mp3",
+   "byteStart": 3383668,
+   "byteEnd": 12183028,
+   "bpm": 122,
+   "anchor": 0.5237,
+   "cues": [
+    63.475,
+    102.819
+   ],
+   "artist": "Raymundo Mendoza",
+   "title": "Reaching",
+   "release": "translations ep [unfound53]",
+   "label": "unfound",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
    "page": "https://archive.org/details/unfound53"
+  },
+  {
+   "file": "Fall Apart - Everyman 122bpm.mp3",
+   "url": "https://archive.org/download/unfound88/unfound88_02_-_fall_apart_-_everyman.mp3",
+   "bpm": 122,
+   "anchor": 0.5397,
+   "cues": [
+    32.015,
+    173.654
+   ],
+   "artist": "Fall Apart",
+   "title": "Everyman",
+   "release": "happy in novi sad [unfound88]",
+   "label": "unfound",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://archive.org/details/unfound88",
+   "byteStart": 9119531,
+   "byteEnd": 17919661
+  },
+  {
+   "file": "Klaus PP & Sloxxx - Salutem 122bpm.mp3",
+   "url": "https://archive.org/download/unfound88/unfound88_10_-_klaus_pp_and_sloxxx_-_salutem.mp3",
+   "bpm": 122,
+   "anchor": 0.5187,
+   "cues": [
+    39.863,
+    102.814
+   ],
+   "artist": "Klaus PP & Sloxxx",
+   "title": "Salutem",
+   "release": "happy in novi sad [unfound88]",
+   "label": "unfound",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://archive.org/details/unfound88",
+   "byteStart": 1851250,
+   "byteEnd": 10650336
+  },
+  {
+   "file": "Vlad Antonenko - Night Groove 124bpm.mp3",
+   "url": "https://archive.org/download/gargan059VladAntonenko-Groove/gargan059_03_Vlad_Antonenko_-_Night_Groove.MP3",
+   "byteStart": 981365,
+   "byteEnd": 6261443,
+   "bpm": 124,
+   "anchor": 1.0047,
+   "cues": [
+    39.714,
+    155.843
+   ],
+   "artist": "Vlad Antonenko",
+   "title": "Night Groove",
+   "release": "Groove [gargan059]",
+   "label": "Gargan Records",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/gargan059VladAntonenko-Groove"
+  },
+  {
+   "file": "Mehta - Bngrv 124.99bpm.mp3",
+   "url": "https://archive.org/download/yarn013/02-Mehta-Bngrv.mp3",
+   "byteStart": 2223894,
+   "byteEnd": 11016462,
+   "bpm": 124.99,
+   "anchor": 0.6896,
+   "cues": [
+    39.093,
+    123.582
+   ],
+   "artist": "Mehta",
+   "title": "Bngrv",
+   "release": "Aimlessly Wandering / Bngrv [YARN013]",
+   "label": "Yarn Audio",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://archive.org/details/yarn013"
+  },
+  {
+   "file": "Daniel Fritz - Dimensions 125bpm.mp3",
+   "url": "https://archive.org/download/unfound88/unfound88_08_-_daniel_fritz_-_dimensions.mp3",
+   "bpm": 125,
+   "anchor": 0.7673,
+   "cues": [
+    31.487,
+    146.687
+   ],
+   "artist": "Daniel Fritz",
+   "title": "Dimensions",
+   "release": "happy in novi sad [unfound88]",
+   "label": "unfound",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://archive.org/details/unfound88",
+   "byteStart": 2085284,
+   "byteEnd": 10885414
+  },
+  {
+   "file": "Vlad Antonenko - Dance Groove 130bpm.mp3",
+   "url": "https://archive.org/download/gargan059VladAntonenko-Groove/gargan059_02_Vlad_Antonenko_-_Dance_Groove.MP3",
+   "byteStart": 1090787,
+   "byteEnd": 6370866,
+   "bpm": 130,
+   "anchor": 0.4935,
+   "cues": [
+    30.032,
+    66.955
+   ],
+   "artist": "Vlad Antonenko",
+   "title": "Dance Groove",
+   "release": "Groove [gargan059]",
+   "label": "Gargan Records",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/gargan059VladAntonenko-Groove"
+  },
+  {
+   "file": "Risey - Tribal Echo (B) 133bpm.mp3",
+   "url": "https://archive.org/download/tou255/tou255b.mp3",
+   "byteStart": 1715472,
+   "byteEnd": 6995550,
+   "bpm": 133,
+   "anchor": 0.6587,
+   "cues": [
+    29.531,
+    101.711
+   ],
+   "artist": "Risey",
+   "title": "Tribal Echo (B)",
+   "release": "Tribal Echo 2009",
+   "label": "",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/tou255"
+  },
+  {
+   "file": "FM - Power Shower 135bpm.mp3",
+   "url": "https://archive.org/download/dig019_postwar_brutal_style/dig019_05_fm_-_power_shower.mp3",
+   "byteStart": 668815,
+   "byteEnd": 5948894,
+   "bpm": 135,
+   "anchor": 1.5937,
+   "cues": [
+    30.038,
+    115.372
+   ],
+   "artist": "FM",
+   "title": "Power Shower",
+   "release": "Postwar Brutal Style [dig019]",
+   "label": "Diggarama",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/dig019_postwar_brutal_style"
+  },
+  {
+   "file": "FM - Postwar Brutal Style 137bpm.mp3",
+   "url": "https://archive.org/download/dig019_postwar_brutal_style/dig019_02_fm_-_postwar_brutal_style.mp3",
+   "byteStart": 1977070,
+   "byteEnd": 7257148,
+   "bpm": 137,
+   "anchor": 0.2893,
+   "cues": [
+    28.319,
+    154.45
+   ],
+   "artist": "FM",
+   "title": "Postwar Brutal Style",
+   "release": "Postwar Brutal Style [dig019]",
+   "label": "Diggarama",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/dig019_postwar_brutal_style"
+  },
+  {
+   "file": "Bertha James - Techno Improv One (Edit) 139.99bpm.mp3",
+   "url": "https://archive.org/download/30-hcir-berthaJamesSplit-RWT-012/2) Bertha James - Techno Improv One (Edit).mp3",
+   "byteStart": 1001964,
+   "byteEnd": 9802095,
+   "bpm": 139.99,
+   "anchor": 0.8582,
+   "cues": [
+    28.29,
+    62.579
+   ],
+   "artist": "Bertha James",
+   "title": "Techno Improv One (Edit)",
+   "release": "Split One [RWT-012]",
+   "label": "RW-Techordings",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "page": "https://archive.org/details/30-hcir-berthaJamesSplit-RWT-012"
   }
  ]
 }

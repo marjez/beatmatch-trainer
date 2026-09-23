@@ -232,7 +232,16 @@ What works, and why each part is load-bearing:
   rolling median of 10, difficulty filter, tap-for-pair tooltip, table view.
   Plain SVG, no library; one series so no legend; dot colour = reveal band.
   Rounds without errBpm (pre-BPM-metric records) are skipped.
-- Demo crate (2026-09-20): demo/crate.json lists 16 CC BY tracks on archive.org
+- Demo crate (2026-09-23): 18 CC tracks, 115-140 BPM, every one fetched with a
+  RANGE request for ~220 s around its drop-in point — the player only ever uses
+  180 s, so a nine-minute file is bandwidth and phone storage spent on audio
+  that is never heard (141 MB for 18 tracks, where 10 uncut were 158 MB).
+  byteStart/byteEnd come from tools/mp3_window.py, which walks real MP3 frame
+  headers so the cut is a valid file; the grid and cues in the manifest are
+  measured ON THE SLICE, so they must be regenerated if a range changes. The
+  loader refuses a 200 response to a ranged request — a server ignoring Range
+  would return the whole file, whose timeline the rebased grid does not match.
+- Demo crate (2026-09-20): demo/crate.json lists CC BY tracks on archive.org
   (CORS open) with BPM, anchor, kick-in cue and credit; loadDemoCrate() fetches
   them one at a time into IndexedDB with `credit` on the record, and the crate
   panel shows credits (CC BY requires attribution + licence link). The service

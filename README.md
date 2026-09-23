@@ -44,12 +44,14 @@ Beatmatch PRO built around your own crate.
 ## Demo crate
 
 No music of your own to hand? **Crate & settings → Load the demo crate** fetches
-sixteen Creative Commons BY house, tech-house and minimal tracks from netlabels
-on the Internet Archive (~250 MB, downloaded once, stored on the device like
-any other track). Tempos, beat grids and a "kick in" cue were analysed with
-`tools/harness/analyse_crate.html`; credits with licence links are shown under
-the crate. Nothing is bundled in the app itself — `demo/crate.json` is a list of
-URLs and metadata.
+eighteen Creative Commons house, tech-house and techno tracks (115–140 BPM) from
+netlabels on the Internet Archive — about 140 MB, downloaded once and stored on
+the device like any other track. Only the window the player can use is fetched:
+a Range request for ~220 s around the drop-in point, cut on real MP3 frame
+boundaries by `tools/mp3_window.py`. Tempos and beat grids come from
+`tools/harness/analyse_crate.html`, and every drop-in cue was verified by
+playing it (`tools/harness/verify_cues.html`). Credits with licence links are
+shown under the crate; nothing is bundled — `demo/crate.json` is metadata.
 
 ## Deploy to GitHub Pages
 

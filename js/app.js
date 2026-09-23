@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v24';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v25';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -347,8 +347,17 @@ async function loadDemoCrate() {
         if (!t || typeof t.file !== 'string' || typeof t.url !== 'string') throw new Error('bad entry');
         const name = t.file.replace(/\.[^.]+$/, '');
         if (tracks.some(x => x.name === name)) continue;
-        const res = await fetch(t.url);
+        // byteStart/byteEnd: fetch only the window the app can actually play.
+        // The player uses 180 s from the drop-in point, so a nine-minute file
+        // is mostly bandwidth and phone storage spent on audio never heard.
+        // The range lands on real MP3 frame boundaries (tools/mp3_window.py),
+        // so the slice is a valid file on its own.
+        const ranged = Number.isFinite(t.byteStart) && Number.isFinite(t.byteEnd);
+        const res = await fetch(t.url, ranged ? { headers: { Range: `bytes=${t.byteStart}-${t.byteEnd - 1}` } } : undefined);
         if (!res.ok) throw new Error('HTTP ' + res.status);
+        // A server that ignores Range answers 200 with the whole file; that
+        // still plays, but the grid is rebased to the slice, so refuse it.
+        if (ranged && res.status !== 206) throw new Error('range not honoured');
         const blob = new Blob([await res.arrayBuffer()], { type: res.headers.get('content-type') || 'audio/mpeg' });
         const rec = { name, bpm: t.bpm, bpmSource: 'name', blob, anchor: typeof t.anchor === 'number' ? t.anchor : null, cues: t.cues || null,
                       credit: { artist: t.artist, title: t.title, release: t.release, label: t.label, license: t.license, licenseUrl: t.licenseUrl, page: t.page } };
@@ -1605,7 +1614,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v24';
+const APP_BUILD = 'bmt-v25';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;

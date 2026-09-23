@@ -13,28 +13,36 @@ try {
   let app = await bootApp();
   const { g, bmt } = app;
   g('demoBtn').click();
-  await waitFor(() => bmt.tracks.length >= 3 && !g('demoBtn').disabled, 60000, 'demo load');
+  await waitFor(() => bmt.tracks.length >= 4 && !g('demoBtn').disabled, 60000, 'demo load');
   R.tracks = bmt.tracks.map(t => ({ name: t.name, bpm: t.bpm, anchor: t.anchor, credit: !!t.credit, size: t.blob.size }));
-  if (bmt.tracks.length !== 3) fail('expected 3 tracks (one URL is broken)', R.tracks);
+  if (bmt.tracks.length !== 4) fail('expected 4 tracks (3 whole, 1 ranged; one URL is broken)', R.tracks);
   if (!bmt.tracks.every(t => t.bpm && typeof t.anchor === 'number' && t.credit && t.blob.size > 1e6)) fail('track fields', R.tracks);
+  // The shipped manifest fetches a byte range; a ranged entry must store only
+  // that window, and a server answering 200 to a Range request must be
+  // refused (the grid in the manifest is rebased to the slice).
+  const ranged = bmt.tracks.find(t => /Ranged/.test(t.name));
+  if (ranged) {
+    R.ranged = { name: ranged.name, size: ranged.blob.size };
+    if (ranged.blob.size > 2e6) fail('ranged track stored more than its window', R.ranged);
+  } else fail('the ranged fixture track was not added');
   R.toast = g('toast').textContent;
-  if (!/3 demo tracks added, 1 failed/.test(R.toast)) fail('toast', R.toast);
+  if (!/4 demo tracks added, 1 failed/.test(R.toast)) fail('toast', R.toast);
   R.credits = { hidden: g('creditsBox').hidden, rows: g('creditsList').querySelectorAll('.credit-row').length, sample: g('creditsList').textContent.slice(0, 80) };
-  if (R.credits.hidden || R.credits.rows !== 3) fail('credits', R.credits);
+  if (R.credits.hidden || R.credits.rows !== 4) fail('credits', R.credits);
   await waitReady(app);
   R.roundStarted = !!bmt.round;
   // Second load: nothing added.
   g('demoBtn').click(); await waitFor(() => !g('demoBtn').disabled, 20000, 'second load');
   await sleep(100);
   R.second = { tracks: bmt.tracks.length, toast: g('toast').textContent };
-  if (R.second.tracks !== 3) fail('duplicates added', R.second);
+  if (R.second.tracks !== 4) fail('duplicates added', R.second);
   // Reload: still there, still credited.
   document.getElementById('f').contentWindow.location.reload();
   await sleep(500);
   app = await bootApp();
-  await waitFor(() => app.bmt.tracks.length >= 3, 10000, 'tracks after reload');
+  await waitFor(() => app.bmt.tracks.length >= 4, 10000, 'tracks after reload');
   R.afterReload = { tracks: app.bmt.tracks.length, credited: app.bmt.tracks.filter(t => t.credit).length };
-  if (R.afterReload.credited !== 3) fail('credits lost on reload', R.afterReload);
+  if (R.afterReload.credited !== 4) fail('credits lost on reload', R.afterReload);
   R.jsErrors = app.errs;
   R.verdict = R.failures.length ? 'FAIL' : 'PASS';
   await post(R);
