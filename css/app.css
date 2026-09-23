@@ -219,9 +219,6 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
   position: absolute; inset: 0; background: var(--plinth);
   transform: scaleY(1); transform-origin: top; will-change: transform;
 }
-.reveal-parity { font-family: var(--font-mono); font-size: 14px; color: var(--amber); margin-top: 12px; letter-spacing: 0.04em; }
-.reveal-parity[hidden] { display: none; }
-.reveal-parity .stars { color: var(--amber); letter-spacing: 0.15em; }
 
 /* ---- Progress (stats) ---------------------------------------------------- */
 .kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }

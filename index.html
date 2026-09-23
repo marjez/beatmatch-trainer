@@ -14,7 +14,7 @@
 <!-- ?v= is the build stamp: Safari kept a cached app.js across reloads on the
      phone, and a versioned URL is the only reload-proof way to invalidate it.
      Bump alongside APP_BUILD and the sw.js CACHE. -->
-<link rel="stylesheet" href="css/app.css?v=bmt-v23">
+<link rel="stylesheet" href="css/app.css?v=bmt-v24">
 </head>
 <body>
 <div class="app">
@@ -147,7 +147,7 @@
           <button data-aids="on">Visual aids</button>
         </div>
       </div>
-      <div class="setting-hint">Visual aids adds what Beatmatch PRO puts on screen: level meters, scrolling waveforms with the beat grid, and a score out of 100 with stars on the reveal. No BPM is ever shown while you play — a number to read is a match you didn't hear. Ears only is the honest default: with meters and waveforms you can line the kicks up by eye.</div>
+      <div class="setting-hint">Visual aids adds what Beatmatch PRO puts on screen: level meters and scrolling waveforms with the beat grid. No BPM is ever shown while you play, and the reveal still reports the one number that matters — how many BPM you were out. Ears only is the honest default: with meters and waveforms you can line the kicks up by eye.</div>
       <div class="settings-row" style="margin-top:8px;">
         <div class="seg" id="splitSeg">
           <button data-split="off" class="on">Both centred</button>
@@ -215,7 +215,6 @@
       <div class="strobe-row" id="strobeRow"></div>
     </div>
     <div class="strobe-caption" id="strobeCaption"></div>
-    <div class="reveal-parity" id="revealParity" hidden></div>
     <div class="reveal-detail" id="revealDetail"></div>
     <div class="actions" style="margin-top:22px;">
       <button class="btn-secondary" id="retryBtn">Same pair again</button>
@@ -226,6 +225,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=bmt-v23"></script>
+<script type="module" src="js/app.js?v=bmt-v24"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v23';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v24';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -1001,13 +1001,6 @@ function setAids(on) {
   if (on) { measureFaders(); renderAllFaders(); kickAids(); }
   else { if (aidsRaf !== null) { cancelAnimationFrame(aidsRaf); aidsRaf = null; } measureFaders(); renderAllFaders(); }
 }
-// Score out of 100 and stars for the reveal, Beatmatch PRO style (approximation).
-function parityScore(absBpm) {
-  const pct = Math.max(0, 100 - 20 * absBpm);
-  const stars = absBpm < 0.5 ? 5 : absBpm < 1 ? 4 : absBpm < 2 ? 3 : absBpm < 4 ? 2 : 1;
-  return { pct, stars };
-}
-
 // ---------- Fader ----------
 // ±8% is the SL-1210 range and stays the default. ×2 opens it to ±16% for the
 // times a pair genuinely needs more room; it does not change the hidden offset,
@@ -1346,12 +1339,6 @@ revealBtn.addEventListener('click', async () => {
     $('revealSub').textContent = 'tempo off (no BPM tagged for deck 1)';
     sEl.className = 'reveal-score ' + (absErr <= 0.05 ? 'good' : absErr <= 0.25 ? 'mid' : 'bad');
   }
-  const parity = $('revealParity');
-  if (aids && absBpm !== null) {
-    const { pct, stars } = parityScore(absBpm);
-    parity.innerHTML = `Score ${pct.toFixed(0)}% · <span class="stars">${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</span>`;
-    parity.hidden = false;
-  } else parity.hidden = true;
   const dir = err > 0 ? 'fast' : 'slow';
   const sign = v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
   // With both faders live the answer is a relationship, not a single position:
@@ -1618,7 +1605,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v23';
+const APP_BUILD = 'bmt-v24';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -1697,7 +1684,7 @@ if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
     get ctx() { return ctx; }, get master() { return master; },
     get round() { return round && { ...round }; },            // copy: writes must not reach the round
     get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
-    decks, rateFor, phraseStart, deckGain, parityScore, loadDeck,
+    decks, rateFor, phraseStart, deckGain, loadDeck,
   };
 }
 

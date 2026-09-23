@@ -45,16 +45,17 @@ try {
   if (/bpm/i.test(R.on.mixerText)) fail('BPM text on the mixer with aids on', R.on.mixerText);
   if (R.on.rafCallsIn500ms < 20) fail('animation loop not running with aids on', R.on);
   if (R.on.dragCostMs.median > 1.5) fail('fader got expensive with aids on', R.on);
-  // Reveal shows the parity line only with aids on
+  // The reveal reports BPM off and nothing else: the %/★ line was removed
+  // because its bands contradicted the colour bands — a 0.40 BPM miss showed
+  // a red headline above five gold stars.
   g('revealBtn').click(); await sleep(100);
-  R.revealParity = g('revealParity').textContent; R.revealParityHidden = g('revealParity').hidden;
-  if (R.revealParityHidden || !/Score \d+% · [★☆]{5}/.test(R.revealParity)) fail('parity line missing on reveal', R.revealParity);
+  R.revealText = app.d.querySelector('.reveal-card').textContent.replace(/\s+/g, ' ').trim();
+  if (/★|Score \d+%/.test(R.revealText)) fail('a star score is back on the reveal', R.revealText);
   g('nextBtn').click(); await waitReady(app);
   // OFF again: loop stops, analysers detached, parity line hidden
   g('aidsSeg').querySelector('[data-aids="off"]').click(); await sleep(300);
   R.offAgain = { analyserA: !!bmt.decks.A.analyser, rafCallsIn500ms: await rafCount(500) };
   if (R.offAgain.analyserA || R.offAgain.rafCallsIn500ms > 2) fail('aids did not switch off cleanly', R.offAgain);
-  R.scoreMap = [0, 0.3, 0.5, 0.99, 1, 2, 4, 6].map(b => [b, bmt.parityScore(b)]);
   R.jsErrors = app.errs;
   R.verdict = R.failures.length ? 'FAIL' : 'PASS';
   await post(R);

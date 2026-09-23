@@ -28,7 +28,7 @@ Beatmatch PRO built around your own crate.
   down wanders that much on its own), then ~4× finer at 120 px out, enough to
   place it inside 0.01 BPM.
 - **Visual aids** (off by default) adds level meters and scrolling waveforms with
-  the beat grid, plus a %/★ score on the reveal. No BPM is shown while you play.
+  the beat grid. No BPM is shown while you play.
 - **Progress** in the sheet charts every round you have revealed, with the rolling
   median; rounds played with visual aids are kept out of the trend.
 - **±8%** under the fader is the SL-1210 range. Tap it for **±16%** when a pair
