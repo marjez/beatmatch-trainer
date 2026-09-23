@@ -213,6 +213,24 @@
    "page": "https://archive.org/details/gargan059VladAntonenko-Groove"
   },
   {
+   "file": "CJ Tari - Veintitres 124bpm.mp3",
+   "url": "https://archive.org/download/miniatura012CjTari-CasualidadesEp/03-Veintitres.mp3",
+   "byteStart": 2255849,
+   "byteEnd": 11055980,
+   "bpm": 124,
+   "anchor": 0.9448,
+   "cues": [
+    55.138
+   ],
+   "artist": "CJ Tari",
+   "title": "Veintitres",
+   "release": "Casualidades EP [miniatura 012]",
+   "label": "Miniatura",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/miniatura012CjTari-CasualidadesEp"
+  },
+  {
    "file": "Mehta - Bngrv 124.99bpm.mp3",
    "url": "https://archive.org/download/yarn013/02-Mehta-Bngrv.mp3",
    "byteStart": 2223894,
@@ -249,6 +267,100 @@
    "page": "https://archive.org/details/unfound88",
    "byteStart": 2085284,
    "byteEnd": 10885414
+  },
+  {
+   "file": "Oilboy's aftersun - House Music Is The Answer 125bpm.mp3",
+   "url": "https://archive.org/download/onmp177/01_Oilboysaftersun_Housemusicistheanswer.mp3",
+   "byteStart": 1310595,
+   "byteEnd": 6590046,
+   "bpm": 125,
+   "anchor": 1.2573,
+   "cues": [
+    31.977,
+    62.697
+   ],
+   "artist": "Oilboy's aftersun",
+   "title": "House Music Is The Answer",
+   "release": "Disco im Keller [onmp177]",
+   "label": "onmp",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/onmp177"
+  },
+  {
+   "file": "Bobsan - Nine Sacred Bugs 125bpm.mp3",
+   "url": "https://archive.org/download/stroboskop016/Bobsan_-_Nine_Sacred_Bugs_B3.mp3",
+   "byteStart": 1295604,
+   "byteEnd": 8714268,
+   "bpm": 125,
+   "anchor": 0.7484,
+   "cues": [
+    77.548,
+    115.948
+   ],
+   "artist": "Bobsan",
+   "title": "Nine Sacred Bugs",
+   "release": "Vinylized Vol.1",
+   "label": "Stroboskop",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/stroboskop016"
+  },
+  {
+   "file": "Max Fader - Day Is Dying 127.56bpm.mp3",
+   "url": "https://archive.org/download/miniatura034MaxFader-Archive1.0EP/06-maxFader-DayIsDying.mp3",
+   "byteStart": 2136795,
+   "byteEnd": 10936926,
+   "bpm": 127.56,
+   "anchor": 1.7553,
+   "cues": [
+    61.962
+   ],
+   "artist": "Max Fader",
+   "title": "Day Is Dying",
+   "release": "Archive 1.0 EP [miniatura 034]",
+   "label": "Miniatura",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/miniatura034MaxFader-Archive1.0EP"
+  },
+  {
+   "file": "Oilboy's aftersun vs Mr.DeVo! - Discobeat 128bpm.mp3",
+   "url": "https://archive.org/download/onmp177/04_OilboysaftersunvsMrDeVo_Discobeat.mp3",
+   "byteStart": 386947,
+   "byteEnd": 5667025,
+   "bpm": 128,
+   "anchor": 0.9744,
+   "cues": [
+    38.474,
+    75.974
+   ],
+   "artist": "Oilboy's aftersun vs Mr.DeVo!",
+   "title": "Discobeat",
+   "release": "Disco im Keller [onmp177]",
+   "label": "onmp",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/onmp177"
+  },
+  {
+   "file": "Zinoeki - Go Deeper 129.99bpm.mp3",
+   "url": "https://archive.org/download/onmp163/01_Zinoeki_Godeeper.mp3",
+   "byteStart": 357146,
+   "byteEnd": 5637224,
+   "bpm": 129.99,
+   "anchor": 0.957,
+   "cues": [
+    30.497,
+    89.577
+   ],
+   "artist": "Zinoeki",
+   "title": "Go Deeper",
+   "release": "HotOrNot 1 [onmp163]",
+   "label": "onmp",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/onmp163"
   },
   {
    "file": "Vlad Antonenko - Dance Groove 130bpm.mp3",
@@ -306,6 +418,25 @@
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
    "page": "https://archive.org/details/dig019_postwar_brutal_style"
+  },
+  {
+   "file": "Side 9000 - Illusion 135bpm.mp3",
+   "url": "https://archive.org/download/stroboskop027/Stroboskop027_Side_9000_-_illusion_Original_320kbit.mp3",
+   "byteStart": 3387740,
+   "byteEnd": 11514364,
+   "bpm": 135,
+   "anchor": 1.5409,
+   "cues": [
+    58.43,
+    93.985
+   ],
+   "artist": "Side 9000",
+   "title": "Illusion",
+   "release": "Touch Of Light EP [stroboskop027]",
+   "label": "Stroboskop",
+   "license": "CC BY 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+   "page": "https://archive.org/details/stroboskop027"
   },
   {
    "file": "FM - Postwar Brutal Style 137bpm.mp3",

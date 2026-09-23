@@ -232,7 +232,7 @@ What works, and why each part is load-bearing:
   rolling median of 10, difficulty filter, tap-for-pair tooltip, table view.
   Plain SVG, no library; one series so no legend; dot colour = reveal band.
   Rounds without errBpm (pre-BPM-metric records) are skipped.
-- Demo crate (2026-09-23): 18 CC tracks, 115-140 BPM, every one fetched with a
+- Demo crate (2026-09-23): 25 CC tracks, 115-140 BPM, every one fetched with a
   RANGE request for ~220 s around its drop-in point — the player only ever uses
   180 s, so a nine-minute file is bandwidth and phone storage spent on audio
   that is never heard (141 MB for 18 tracks, where 10 uncut were 158 MB).

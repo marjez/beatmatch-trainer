@@ -44,8 +44,8 @@ Beatmatch PRO built around your own crate.
 ## Demo crate
 
 No music of your own to hand? **Crate & settings → Load the demo crate** fetches
-eighteen Creative Commons house, tech-house and techno tracks (115–140 BPM) from
-netlabels on the Internet Archive — about 140 MB, downloaded once and stored on
+twenty-five Creative Commons house, tech-house, disco-house and techno tracks
+(115–140 BPM) from netlabels on the Internet Archive — about 190 MB, downloaded once and stored on
 the device like any other track. Only the window the player can use is fetched:
 a Range request for ~220 s around the drop-in point, cut on real MP3 frame
 boundaries by `tools/mp3_window.py`. Tempos and beat grids come from
