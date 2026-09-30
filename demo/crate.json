@@ -439,25 +439,6 @@
    "page": "https://archive.org/details/stroboskop027"
   },
   {
-   "file": "FM - Postwar Brutal Style 137bpm.mp3",
-   "url": "https://archive.org/download/dig019_postwar_brutal_style/dig019_02_fm_-_postwar_brutal_style.mp3",
-   "byteStart": 1977070,
-   "byteEnd": 7257148,
-   "bpm": 137,
-   "anchor": 0.2893,
-   "cues": [
-    28.319,
-    154.45
-   ],
-   "artist": "FM",
-   "title": "Postwar Brutal Style",
-   "release": "Postwar Brutal Style [dig019]",
-   "label": "Diggarama",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/dig019_postwar_brutal_style"
-  },
-  {
    "file": "Bertha James - Techno Improv One (Edit) 139.99bpm.mp3",
    "url": "https://archive.org/download/30-hcir-berthaJamesSplit-RWT-012/2) Bertha James - Techno Improv One (Edit).mp3",
    "byteStart": 1001964,

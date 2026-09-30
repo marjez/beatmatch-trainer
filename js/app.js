@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v26';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v27';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -384,6 +384,32 @@ async function loadDemoCrate() {
 }
 $('demoBtn').addEventListener('click', loadDemoCrate);
 
+// Practice beats: generated here, so there is nothing to download, nothing to
+// licence, and the grid is exact. Each record is a few hundred bytes.
+async function addPracticeBeats() {
+  const btn = $('beatsBtn');
+  btn.disabled = true;
+  try {
+    const { defaultBeatSet } = await import('./beats.js?v=' + APP_BUILD);
+    let added = 0;
+    for (const b of defaultBeatSet()) {
+      if (tracks.some(t => t.name === b.name)) continue;
+      const rec = { name: b.name, bpm: b.bpm, bpmSource: 'name', blob: null,
+                    anchor: 0, cues: [0], credit: null,
+                    synth: { pattern: b.pattern, seed: b.seed, root: b.root } };
+      rec.id = await db.addTrack(rec);
+      tracks.push(rec);
+      added++;
+    }
+    renderLibrary();
+    updateButtons();
+    if (!round && canStart()) startRound();
+    toast(added ? `${added} practice beat${added > 1 ? 's' : ''} added.` : 'The practice beats are already in your crate.');
+  } catch { toast('Could not build the practice beats.'); }
+  btn.disabled = false;
+}
+$('beatsBtn').addEventListener('click', addPracticeBeats);
+
 function renderCredits() {
   const box = $('creditsBox'), list = $('creditsList');
   const credited = tracks.filter(t => t.credit);
@@ -437,6 +463,9 @@ function renderLibrary() {
     if (typeof t.anchor !== 'number') {
       name.textContent = '⚠ ' + t.name;
       name.title = 'No beat grid — playback starts by guesswork, not on a downbeat';
+    } else if (t.synth) {
+      name.textContent = '♪ ' + t.name;
+      name.title = 'Generated on this device — exact tempo, exact downbeat, nothing stored';
     }
     const bpm = document.createElement('input');
     bpm.className = 'track-bpm' + (t.bpmSource === 'auto' ? ' detected' : '');
@@ -480,7 +509,7 @@ function renderLibrary() {
 
 async function detectMissingBPMs() {
   for (const t of tracks) {
-    if (t.bpm || t.bpmSource === 'pending') continue;
+    if (t.bpm || t.bpmSource === 'pending' || !t.blob) continue;   // a beat has no file
     t.bpmSource = 'pending';
     try {
       let buf = await decodeForAnalysis(t.id);
@@ -671,6 +700,23 @@ function loadDeck(id, track) {
     try {
       const c = ensureCtx();
       ensureChain(id);                                  // graph ready before the first press
+      // A practice beat has no file: it is a recipe, rendered straight into the
+      // pooled window. Offset 0 is beat 1 by construction, so there is no grid
+      // to analyse and no cue to verify.
+      if (track.synth) {
+        const { renderBeat } = await import('./beats.js?v=' + APP_BUILD);
+        if (d.token !== token) return;
+        const win = windowPool(id, c);
+        const out = win.getChannelData(0);
+        renderBeat(out, { ...track.synth, bpm: track.bpm, seconds: WINDOW_S, sampleRate: c.sampleRate });
+        d.buffer = win;
+        d.validSeconds = WINDOW_S;
+        d.peaks = wavePeaks(out, out.length, c.sampleRate);
+        d.ready = true;
+        updateTransport();
+        if (aids) drawWave(id);
+        return;
+      }
       const full = await ctx.decodeAudioData(await track.blob.arrayBuffer());
       if (d.token !== token) return;
       const start = Math.floor(phraseStart(track, full.duration) * c.sampleRate);
@@ -1614,7 +1660,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v26';
+const APP_BUILD = 'bmt-v27';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;

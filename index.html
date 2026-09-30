@@ -14,7 +14,7 @@
 <!-- ?v= is the build stamp: Safari kept a cached app.js across reloads on the
      phone, and a versioned URL is the only reload-proof way to invalidate it.
      Bump alongside APP_BUILD and the sw.js CACHE. -->
-<link rel="stylesheet" href="css/app.css?v=bmt-v26">
+<link rel="stylesheet" href="css/app.css?v=bmt-v27">
 </head>
 <body>
 <div class="app">
@@ -125,6 +125,8 @@
       <button class="detect-btn" id="detectBtn" style="display:none">Detect BPM</button>
       <div class="lib-meta" id="libMeta"></div>
       <div class="track-list hidden" id="trackList"></div>
+      <button class="detect-btn" id="beatsBtn" style="margin-top:12px;">Add practice beats</button>
+      <div class="setting-hint">Eleven generated patterns &mdash; house, funky house, tech house, techno and breaks, 122&ndash;140&nbsp;BPM. Made on this device when a deck loads them, so nothing is downloaded and nothing is stored: the tempo is exact to the sample and playback always starts on beat&nbsp;1. A loud dry kick is easier to match than a record.</div>
       <button class="detect-btn" id="demoBtn" style="margin-top:12px;">Load the demo crate</button>
       <div class="setting-hint">Twenty-five Creative Commons house, tech-house, disco-house and techno tracks (115&ndash;140&nbsp;BPM) from netlabels on the Internet Archive, ~190&nbsp;MB, downloaded once and kept on this device. Only the part the player uses is fetched. Tempos, beat grids and drop-in points are pre-analysed and checked by ear. Credits are listed below the crate.</div>
       <details class="credits" id="creditsBox" hidden>
@@ -225,6 +227,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=bmt-v26"></script>
+<script type="module" src="js/app.js?v=bmt-v27"></script>
 </body>
 </html>

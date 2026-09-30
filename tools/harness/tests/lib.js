@@ -149,7 +149,13 @@ export async function tapMaster(app) {
         acc += y * y; n++;
         if (n === hop) { out.push(Math.sqrt(acc / n)); acc = 0; n = 0; }
       }
-      return out;                       // index = ms since t0
+      // NOT one millisecond per hop: 44/44100 s is 0.9977 ms, and treating the
+      // index as milliseconds drifts 0.23% — 18 ms over an 8 s window, past the
+      // ±15 ms tolerance, so late beats fell outside their own windows and the
+      // check was far stricter than intended. (The same mistake was in
+      // analyse_crate.html, where it biased every BPM by 0.23%.)
+      out.hopS = hop / sr;
+      return out;
     },
     // Is a beat RUNNING on this grid? Mean kick-band energy in a ±15 ms window
     // around each predicted beat, against the same windows placed off-beat.
@@ -157,24 +163,35 @@ export async function tapMaster(app) {
     // no thresholds tuned to one kind of material.
     gridScore(t0, t1, periodS, tolMs = 15) {
       const env = this.lowEnvelope(t0, t1);
-      const P = periodS * 1000;
+      const hopMs = env.hopS * 1000;
+      const P = periodS * 1000 / hopMs;          // beat period, in envelope hops
+      const tol = tolMs / hopMs;
       const mean = (centre) => {
         let sum = 0, k = 0;
-        for (let i = Math.round(centre - tolMs); i <= Math.round(centre + tolMs); i++) {
+        for (let i = Math.round(centre - tol); i <= Math.round(centre + tol); i++) {
           if (i >= 0 && i < env.length) { sum += env[i]; k++; }
         }
         return k ? sum / k : 0;
       };
-      const beats = Math.floor((env.length - tolMs) / P);
+      const beats = Math.floor((env.length - tol) / P);
       let on = 0, off = 0, hits = 0;
       for (let k = 0; k < beats; k++) {
         const e = mean(k * P), o = mean(k * P + P / 2);
         on += e; off += o;
         if (e > o * 1.3) hits++;
       }
-      // Where the first strong kick actually is, in ms from t0.
-      let firstMs = null, peak = 0;
-      for (let i = 0; i < Math.min(env.length, Math.round(P)); i++) if (env[i] > peak) { peak = env[i]; firstMs = i; }
+      // Where the first kick ATTACKS, in ms from t0 — the rising edge, not the
+      // envelope peak. A kick whose sub blooms 30 ms in peaks 30 ms late while
+      // its transient is on time, and reading the peak flagged two perfectly
+      // gridded tracks as out of phase.
+      let firstMs = null, peak = 0, peakAt = 0;
+      const span = Math.min(env.length, Math.round(P));
+      for (let i = 0; i < span; i++) if (env[i] > peak) { peak = env[i]; peakAt = i; }
+      if (peak > 0) {
+        let i = peakAt;
+        while (i > 0 && env[i - 1] > peak * 0.5) i--;      // walk back down the attack
+        firstMs = i * hopMs;
+      }
       return { beats, onGridHits: hits, ratio: off > 0 ? +(on / off).toFixed(2) : null, firstMs };
     },
     disconnect() { try { tapPoint.disconnect(node); } catch {} node.port.onmessage = null; },

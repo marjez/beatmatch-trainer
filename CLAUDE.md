@@ -223,6 +223,25 @@ What works, and why each part is load-bearing:
   perfect match. Both the filename parser and tools/rekordbox_export.py keep the
   fraction — don't "tidy" either back to integers.
 
+## Practice beats (js/beats.js, 2026-09-30)
+The netlabel demo crate is mostly sparse and minimal, which is the wrong
+material for hearing a flam. js/beats.js synthesises 11 patterns (house, funky
+house, tech house, techno, breaks; 122-140 BPM) ON THE DEVICE:
+- A beat track is a RECIPE, not a file: {pattern, seed, root} on the record,
+  no blob at all, a few hundred bytes in IndexedDB. loadDeck branches on
+  track.synth and renders straight into the pooled window buffer.
+- Tempo is exact and offset 0 IS beat 1 by construction, so there is no grid to
+  analyse and no cue to verify. Decimal BPMs, per the no-rounding rule.
+- THE KICK OWNS THE LOW END. A bassline on the offbeats at 55 Hz dropped the
+  on-beat/off-beat kick-band ratio to 1.3 (techno) and 0.97 (breaks) — the kick
+  stopped being the loudest thing in the band you match on. Patterns that lean
+  on offbeat bass set bassOct/bassGain to move it up and out of the way.
+- Swing SHIFTS an odd 16th by a fraction of a step. Multiplying the position by
+  (1+swing) scales it, so step 15 landed nearly two steps late.
+- tools/harness/tests/beats.html plays every pattern through the app and
+  requires the kick on the grid (ratio > 1.8, ≥90% of beats) and the first hit
+  within 20 ms. Breakbeat is exempt: its kick is deliberately not on every beat.
+
 ## Built (was roadmap 1–2, 6)
 - Headphone split toggle: StereoPannerNode per deck, A hard left / B hard right,
   off by default, persisted in the settings store.
@@ -232,7 +251,7 @@ What works, and why each part is load-bearing:
   rolling median of 10, difficulty filter, tap-for-pair tooltip, table view.
   Plain SVG, no library; one series so no legend; dot colour = reveal band.
   Rounds without errBpm (pre-BPM-metric records) are skipped.
-- Demo crate (2026-09-23): 25 CC tracks, 115-140 BPM, every one fetched with a
+- Demo crate (2026-09-23): 24 CC tracks, 115-140 BPM, every one fetched with a
   RANGE request for ~220 s around its drop-in point — the player only ever uses
   180 s, so a nine-minute file is bandwidth and phone storage spent on audio
   that is never heard (141 MB for 18 tracks, where 10 uncut were 158 MB).
@@ -295,6 +314,17 @@ What works, and why each part is load-bearing:
   if that ever needs to run on Linux it wants an ffmpeg branch.
 - Harness numbers are not phone numbers. A desktop browser is not the input
   pipeline iOS uses; the in-app Touch diagnostics panel is the ground truth.
+
+## Harness measurement bugs, twice the same one (2026-09-30)
+An envelope hop of round(sr/1000) samples is 0.9977 ms, NOT 1 ms. Treating the
+index as milliseconds drifts 0.23% — 18 ms over an 8 s window, past the ±15 ms
+tolerance, so late beats fell outside their own windows. It biased every BPM in
+analyse_crate.html (fixed then) and made startpoint.html far stricter than
+intended (fixed now). lib.js's lowEnvelope returns hopS; use it.
+Phase is measured from the kick's ATTACK, not its envelope peak: a kick whose
+sub blooms 30 ms in peaks late while its transient is on time, which failed two
+perfectly gridded tracks. Threshold is 35 ms — the bug it guards against is a
+quarter-second error, and two transients read as one drum up to ~20-50 ms apart.
 
 ## The harness can fail now (2026-09-22)
 browser_test.py used to exit 0 whenever a page posted anything — a test could

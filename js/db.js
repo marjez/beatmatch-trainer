@@ -37,10 +37,12 @@ function tx(db, store, mode, fn) {
   });
 }
 
-export async function addTrack({ name, bpm, bpmSource, blob, anchor = null, cues = null, credit = null }) {
+export async function addTrack({ name, bpm, bpmSource, blob, anchor = null, cues = null, credit = null, synth = null }) {
   const db = await openDB();
+  // `synth` is a practice beat's recipe (pattern, seed, root); such records
+  // carry no blob at all — a few hundred bytes instead of megabytes.
   return tx(db, 'tracks', 'readwrite', s =>
-    s.add({ name, bpm, bpmSource, blob, anchor, cues, credit, added: Date.now() }));
+    s.add({ name, bpm, bpmSource, blob, anchor, cues, credit, synth, added: Date.now() }));
 }
 
 export async function getAllTracks() {

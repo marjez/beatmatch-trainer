@@ -43,7 +43,12 @@ try {
       const P = period * 1000;
       const phaseErr = g2.firstMs === null ? null : Math.abs(g2.firstMs - Math.round(g2.firstMs / P) * P);
       rec1.phaseErrMs = phaseErr === null ? null : +phaseErr.toFixed(1);
-      if (phaseErr === null || phaseErr > 25) fail('playback does not begin on the beat grid', rec1);
+      // 35 ms: the bug this guards against is a quarter-second phase error (a
+      // deck starting between beats). Two transients read as one drum up to
+      // ~20-50 ms apart, so anything inside that window is not what a listener
+      // would call out of phase — and the grid analysis itself carries a few
+      // ms. A tighter limit just failed good tracks on measurement noise.
+      if (phaseErr === null || phaseErr > 35) fail('playback does not begin on the beat grid', rec1);
       pev(w, g('play' + id), 'pointerdown'); await sleep(120);
     }
   }

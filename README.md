@@ -41,10 +41,20 @@ Beatmatch PRO built around your own crate.
   the choice persists between sessions.
 - Your crate and round history are stored on-device (IndexedDB) and persist between sessions.
 
+## Practice beats
+
+**Crate & settings → Add practice beats** puts eleven generated patterns in the
+crate — house, funky house, tech house, techno and breakbeat, 122–140 BPM.
+They are synthesised on the device when a deck loads one, so nothing is
+downloaded and nothing is stored: each is a recipe of a few hundred bytes. The
+tempo is exact to the sample and playback always starts on beat 1, and the kick
+is dry and loud on purpose — a flam between two clean transients is far easier
+to hear than between two records.
+
 ## Demo crate
 
 No music of your own to hand? **Crate & settings → Load the demo crate** fetches
-twenty-five Creative Commons house, tech-house, disco-house and techno tracks
+twenty-four Creative Commons house, tech-house, disco-house and techno tracks
 (115–140 BPM) from netlabels on the Internet Archive — about 190 MB, downloaded once and stored on
 the device like any other track. Only the window the player can use is fetched:
 a Range request for ~220 s around the drop-in point, cut on real MP3 frame

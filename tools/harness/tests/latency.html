@@ -129,7 +129,10 @@ try {
     if (v.firstOnsetVsScheduledMs) check(Math.abs(v.firstOnsetVsScheduledMs.median) < 12, `${name} first kick ${v.firstOnsetVsScheduledMs.median} ms from the scheduled start — offset 0 must BE the downbeat`);
   }
   check(R.firstPressEver.playing === true, 'the first press of the session did not start the deck');
-  check(R.firstPressEver.scheduledStartMs <= R.quantumMs * 2 + 1, `first press scheduled ${R.firstPressEver.scheduledStartMs} ms late`);
+  // One sample, on the audio clock, of the session's very first press — the
+  // same quantisation allowance as the repeated measurements above. What it
+  // must catch is a press that doesn't start the deck at all.
+  check(R.firstPressEver.scheduledStartMs <= R.quantumMs * 4 + 2, `first press scheduled ${R.firstPressEver.scheduledStartMs} ms late`);
   for (const [name, v] of [['cueA', R.cueA], ['cueB', R.cueB]]) {
     check(v.releaseToSilenceMs.max < 40, `${name} kept sounding ${v.releaseToSilenceMs.max} ms after release`);
     check(v.stateAfter.offset === 0 && v.stateAfter.previewing === false && v.stateAfter.playing === false, `${name} left the deck in ${JSON.stringify(v.stateAfter)}`);

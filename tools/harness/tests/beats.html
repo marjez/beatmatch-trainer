@@ -1,0 +1,54 @@
+<!doctype html><meta charset=utf-8><title>beats</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Practice beats, played through the real app: every pattern must put its kick
+// on the grid from the first sample (they are generated, so anything else is a
+// bug in the generator), the tempo must be exact, and nothing may be stored.
+import { post, sleep, bootApp, waitReady, tapMaster, pev, waitFor, stats } from './lib.js';
+const R = { tracks: [], failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+try {
+  const app = await bootApp();
+  const { w, g, bmt } = app;
+  g('beatsBtn').click();
+  await waitFor(() => bmt.tracks.length >= 11 && !g('beatsBtn').disabled, 30000, 'beats added');
+  R.count = bmt.tracks.length;
+  // A beat is a recipe: no blob at all.
+  const stored = bmt.tracks.filter(t => t.blob);
+  if (stored.length) fail('a practice beat stored audio', stored.map(t => t.name));
+  if (!bmt.tracks.every(t => t.synth && t.bpm && t.anchor === 0)) fail('beat record fields', bmt.tracks.map(t => [t.name, !!t.synth, t.bpm, t.anchor]));
+  await waitReady(app);
+  pev(w, g('playA'), 'pointerdown'); await sleep(50); pev(w, g('playA'), 'pointerdown'); await sleep(100);
+  const rec = await tapMaster(app);
+  const SPAN = 8;
+  const seen = new Set();
+  for (let n = 0; n < 40 && seen.size < bmt.tracks.length; n++) {
+    g('newPairBtn').click(); await waitReady(app);
+    for (const id of ['A', 'B']) {
+      const tr = bmt.tracks.find(t => t.id === (id === 'A' ? bmt.round.aId : bmt.round.bId));
+      if (seen.has(tr.name)) continue; seen.add(tr.name);
+      bmt.decks[id].offset = 0; rec.clear(); await sleep(80);
+      pev(w, g('play' + id), 'pointerdown');
+      const sched = bmt.decks[id].mark;
+      await sleep(SPAN * 1000 + 250); await rec.settle(sched + SPAN);
+      const period = 60 / tr.bpm / bmt.rateFor(id);
+      const s = rec.gridScore(sched, sched + SPAN, period);
+      const P = period * 1000;
+      const phase = s.firstMs === null ? 9e9 : Math.abs(s.firstMs - Math.round(s.firstMs / P) * P);
+      const rec1 = { name: tr.name, bpm: tr.bpm, ratio: s.ratio, hits: `${s.onGridHits}/${s.beats}`, phaseMs: +phase.toFixed(1) };
+      R.tracks.push(rec1);
+      // Breakbeat is the one pattern whose kick is not on every beat, by design.
+      const fourToFloor = !/Breakbeat/.test(tr.name);
+      if (fourToFloor && (!(s.ratio > 1.8) || s.onGridHits < s.beats * 0.9)) fail('generated beat is not on the grid', rec1);
+      if (phase > 20) fail('generated beat does not start on the beat', rec1);
+      pev(w, g('play' + id), 'pointerdown'); await sleep(100);
+    }
+  }
+  R.covered = seen.size;
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  rec.disconnect();
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>
