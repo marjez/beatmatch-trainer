@@ -1,0 +1,75 @@
+<!doctype html><meta charset=utf-8><title>loop</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// A deck must keep a beat going for a whole round. Real tracks have
+// breakdowns — measured, the median demo track runs a beat for only 80% of a
+// three-minute window — so each one declares a beat-solid loop and the deck
+// repeats it. This plays PAST the loop point and checks the beat is still
+// running on the same grid afterwards, and that the seam is not audible as a
+// gap.
+import { post, sleep, bootApp, loadCrate, waitReady, tapMaster, pev, waitFor } from './lib.js';
+const R = { tracks: [], failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+try {
+  const app = await bootApp();
+  await loadCrate(app);
+  await waitReady(app);
+  const { w, g, bmt } = app;
+  pev(w, g('playA'), 'pointerdown'); await sleep(50); pev(w, g('playA'), 'pointerdown'); await sleep(100);
+  const rec = await tapMaster(app);
+
+  // Every track that declares a loop. A loop that changes the beat's phase
+  // when it wraps is worse than no loop at all in a beatmatching trainer, and
+  // material does that even when the arithmetic is exact.
+  const looped = [...bmt.tracks].filter(t => t.loopEnd > t.loopStart);
+  if (!looped.length) fail('no track declared a loop');
+
+  for (const tr of looped) {
+    const id = 'A';
+    await bmt.loadDeck(id, tr);
+    await waitFor(() => bmt.decks[id].ready, 30000, 'deck ready');
+    const d = bmt.decks[id];
+    const loopS = d.loopSeconds;
+    if (!loopS) { fail('deck did not loop', { track: tr.name }); continue; }
+    // Start a WHOLE NUMBER OF BEATS before the seam. Six seconds is not one,
+    // so playback began mid-beat and every grid probe landed between beats —
+    // which read as the material being out of phase when it was the test.
+    const beatS = 60 / tr.bpm;
+    d.offset = Math.max(0, loopS - Math.round(6 / beatS) * beatS);
+    const seamOffsetS = loopS - d.offset;
+    rec.clear(); await sleep(80);
+    pev(w, g('play' + id), 'pointerdown');
+    const sched = d.mark;
+    await sleep(12000); await rec.settle(sched + 11.5);
+    const period = 60 / tr.bpm / bmt.rateFor(id);
+    // Before the seam, across it, and after it.
+    const before = rec.gridScore(sched, sched + seamOffsetS - 0.5, period);
+    // Across and after must also start on a beat of the SAME grid, so step in
+    // whole beats from the scheduled start.
+    const beatsTo = t => Math.round(t / period) * period;
+    const across = rec.gridScore(sched + beatsTo(seamOffsetS - 1.5), sched + beatsTo(seamOffsetS + 2), period);
+    const after = rec.gridScore(sched + beatsTo(seamOffsetS + 1.5), sched + beatsTo(seamOffsetS + 5.5), period);
+    // A gap at the seam is only a gap if it is worse than the gaps the music
+    // already has: a sparse track's low end genuinely falls away between
+    // kicks, which is most of a beat at 122 BPM. Compare like for like.
+    const seamAt = sched + seamOffsetS;
+    const atSeam = rec.scanRuns(seamAt - 0.5, seamAt + 0.5, 0.006);
+    const baseline = rec.scanRuns(sched + 1.5, sched + 2.5, 0.006);
+    const quiet = rec.scanRuns(sched, sched + 11.5, 0.006);
+    const row = { track: tr.name.slice(0, 34), loopS: +loopS.toFixed(1),
+                  beforeRatio: before.ratio, acrossRatio: across.ratio, afterRatio: after.ratio,
+                  seamQuietMs: atSeam.longestMs, baselineQuietMs: baseline.longestMs,
+                  longestQuietMs: quiet.longestMs };
+    R.tracks.push(row);
+    row.ok = (after.ratio > 1.4) && after.onGridHits >= after.beats * 0.7
+             && across.ratio > 1.2 && atSeam.longestMs <= baseline.longestMs + 40;
+    if (!row.ok) fail('loop does not hold the beat across the wrap', row);
+    pev(w, g('play' + id), 'pointerdown'); await sleep(150);
+  }
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  rec.disconnect();
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>

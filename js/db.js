@@ -37,12 +37,15 @@ function tx(db, store, mode, fn) {
   });
 }
 
-export async function addTrack({ name, bpm, bpmSource, blob, anchor = null, cues = null, credit = null, synth = null }) {
+export async function addTrack({ name, bpm, bpmSource, blob, anchor = null, cues = null, credit = null,
+                                synth = null, loopStart = null, loopEnd = null }) {
   const db = await openDB();
   // `synth` is a practice beat's recipe (pattern, seed, root); such records
   // carry no blob at all — a few hundred bytes instead of megabytes.
+  // loopStart/loopEnd mark the track's beat-solid section, which the deck
+  // plays on repeat rather than running into a breakdown mid-round.
   return tx(db, 'tracks', 'readwrite', s =>
-    s.add({ name, bpm, bpmSource, blob, anchor, cues, credit, synth, added: Date.now() }));
+    s.add({ name, bpm, bpmSource, blob, anchor, cues, credit, synth, loopStart, loopEnd, added: Date.now() }));
 }
 
 export async function getAllTracks() {

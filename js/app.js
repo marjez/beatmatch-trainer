@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v28';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v29';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -21,9 +21,9 @@ let aids = false;           // visual aids: meters, waveforms, %/★ on the reve
 // so Cue can return to the start point and Play can resume where it stopped.
 const decks = {
   A: { buffer: null, pool: null, validSeconds: 0, source: null, gain: null, panner: null, playing: false, ready: false,
-       fader: 0, nudge: 0, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
+       fader: 0, nudge: 0, rate: 1, offset: 0, mark: 0, previewing: false, token: 0, loopSeconds: 0 },
   B: { buffer: null, pool: null, validSeconds: 0, source: null, gain: null, panner: null, playing: false, ready: false,
-       fader: 0, nudge: 0, rate: 1, offset: 0, mark: 0, previewing: false, token: 0 },
+       fader: 0, nudge: 0, rate: 1, offset: 0, mark: 0, previewing: false, token: 0, loopSeconds: 0 },
 };
 // Crossfader position, 0 = deck 1 only, 1 = deck 2 only. Equal-power curve:
 // centre puts both decks at -3 dB, the blend you actually beatmatch on.
@@ -268,6 +268,12 @@ function applyGrid(rec, meta) {
   let changed = false;
   if (typeof meta.anchor === 'number' && rec.anchor !== meta.anchor) { rec.anchor = meta.anchor; changed = true; }
   if (Array.isArray(meta.cues) && meta.cues.length) { rec.cues = meta.cues; changed = true; }
+  // A loop from crate.json: the beat-solid section the deck should repeat
+  // rather than running into a breakdown. Without this, tracks added through
+  // the file picker never got one even when the manifest declared it.
+  if (typeof meta.loopStart === 'number' && typeof meta.loopEnd === 'number' && meta.loopEnd > meta.loopStart) {
+    rec.loopStart = meta.loopStart; rec.loopEnd = meta.loopEnd; changed = true;
+  }
   // Rekordbox's own BPM beats our detector's guess: taking the anchor while
   // keeping an auto-detected tempo computes the phrase grid with the wrong
   // beat length — a 125.0-vs-126.02 discrepancy puts the "downbeat" 240 ms
@@ -305,7 +311,7 @@ fileInput.addEventListener('change', async (e) => {
     const name = f.name.replace(/\.[^.]+$/, '');
     if (tracks.some(t => t.name === name && t.blob.size === f.size)) continue;
     const bpm = bpmFromName(f.name);
-    const rec = { name, bpm, bpmSource: bpm ? 'name' : null, blob: f, anchor: null, cues: null };
+    const rec = { name, bpm, bpmSource: bpm ? 'name' : null, blob: f, anchor: null, cues: null, loopStart: null, loopEnd: null };
     if (grid && applyGrid(rec, grid.get(name))) gridApplied++;
     rec.id = await db.addTrack(rec);
     tracks.push(rec);
@@ -360,6 +366,7 @@ async function loadDemoCrate() {
         if (ranged && res.status !== 206) throw new Error('range not honoured');
         const blob = new Blob([await res.arrayBuffer()], { type: res.headers.get('content-type') || 'audio/mpeg' });
         const rec = { name, bpm: t.bpm, bpmSource: 'name', blob, anchor: typeof t.anchor === 'number' ? t.anchor : null, cues: t.cues || null,
+                      loopStart: t.loopStart, loopEnd: t.loopEnd,
                       credit: { artist: t.artist, title: t.title, release: t.release, label: t.label, license: t.license, licenseUrl: t.licenseUrl, page: t.page } };
         rec.id = await db.addTrack(rec);
         tracks.push(rec);
@@ -576,6 +583,20 @@ function phraseStart(track, duration) {
   return at < duration - 20 ? at : target;
 }
 
+// A track's beat-solid region, both ends on a phrase boundary. Analysed
+// offline (tools/harness/audit_window.html) and carried in the manifest;
+// anything shorter than 8 phrases is not worth looping.
+function loopRegion(track, duration) {
+  const a = track.loopStart, b = track.loopEnd;
+  if (typeof a !== 'number' || typeof b !== 'number') return null;
+  const from = Math.max(0, a);
+  const to = Math.min(b, duration, from + WINDOW_S);
+  // 8 phrases, less a hair: a loop measured as exactly 8 phrases long can
+  // round a millisecond under and silently stop being a loop at all.
+  if (!(to - from >= 8 * 16 * (60 / (track.bpm || 128)) - 0.05)) return null;
+  return { from, to };
+}
+
 function pickHidden() {
   const [lo, hi] = difficulty === 'easy' ? [2, 6] : [0.5, 2.5];
   const mag = lo + Math.random() * (hi - lo);
@@ -694,6 +715,7 @@ function loadDeck(id, track) {
   d.ready = false;
   d.buffer = null;
   d.offset = 0;
+  d.loopSeconds = 0;
   updateTransport();
   loadChain = loadChain.then(async () => {
     if (d.token !== token) return;                      // a newer round won
@@ -708,9 +730,14 @@ function loadDeck(id, track) {
         if (d.token !== token) return;
         const win = windowPool(id, c);
         const out = win.getChannelData(0);
-        renderBeat(out, { ...track.synth, bpm: track.bpm, seconds: WINDOW_S, sampleRate: c.sampleRate });
+        // 32 bars, looped. A beat is periodic, so rendering three minutes of
+        // it was waste: this is a third of the work and the deck still never
+        // runs out.
+        const loopS = 32 * 4 * (60 / track.bpm);
+        renderBeat(out, { ...track.synth, bpm: track.bpm, seconds: loopS, sampleRate: c.sampleRate });
         d.buffer = win;
-        d.validSeconds = WINDOW_S;
+        d.validSeconds = loopS;
+        d.loopSeconds = loopS;
         d.peaks = wavePeaks(out, out.length, c.sampleRate);
         d.ready = true;
         updateTransport();
@@ -719,7 +746,15 @@ function loadDeck(id, track) {
       }
       const full = await ctx.decodeAudioData(await track.blob.arrayBuffer());
       if (d.token !== token) return;
-      const start = Math.floor(phraseStart(track, full.duration) * c.sampleRate);
+      // LOOP THE BEAT-SOLID SECTION. Real tracks have breakdowns: measured
+      // across the demo crate, the median track carries a running beat for
+      // only 80% of a three-minute window and 15 of 24 have a dead stretch of
+      // 16 s or more. Matching against silence teaches nothing, so when a
+      // track declares a loop (both ends on a phrase boundary, found by
+      // tools/harness/audit_window.html) the deck plays that and repeats it.
+      const loop = loopRegion(track, full.duration);
+      const startS = loop ? loop.from : phraseStart(track, full.duration);
+      const start = Math.floor(startS * c.sampleRate);
       // Reuse a pooled buffer. Allocating a fresh ~35 MB Float32Array per deck
       // per round, then dropping it along with the ~150 MB decoded original, is
       // exactly the churn that makes the collector pause the main thread — and a
@@ -728,11 +763,20 @@ function loadDeck(id, track) {
       const out = win.getChannelData(0);
       const L = full.getChannelData(0);
       const R = full.numberOfChannels > 1 ? full.getChannelData(1) : L;
-      const avail = Math.max(1, Math.min(win.length, full.length - start));
+      // A LOOP MUST BE A WHOLE NUMBER OF BEATS, to the sample. The manifest
+      // rounds its loop points to the millisecond, which left one track's
+      // loop 0.1 beat long — every wrap shifted the grid by 43 ms and the
+      // beat appeared to jump. Recompute the length from the track's own
+      // tempo and let the samples, not the JSON, decide.
+      const wanted = loop
+        ? Math.round(Math.round((loop.to - loop.from) / (60 / track.bpm)) * (60 / track.bpm) * c.sampleRate)
+        : win.length;
+      const avail = Math.max(1, Math.min(win.length, wanted, full.length - start));
       for (let i = 0; i < avail; i++) out[i] = (L[start + i] + R[start + i]) * 0.5;
       if (avail < win.length) out.fill(0, avail);       // silence the unused tail
       d.buffer = win;                                   // full buffer drops here
       d.validSeconds = avail / c.sampleRate;
+      d.loopSeconds = loop ? d.validSeconds : 0;
       d.peaks = wavePeaks(out, avail, c.sampleRate);    // for the visual-aids waveform
       d.ready = true;
       updateTransport();
@@ -814,9 +858,21 @@ function startSource(id, from, when) {
   d.rate = rateFor(id);
   src.playbackRate.value = d.rate;
   const valid = d.validSeconds || d.buffer.duration;
-  const at = Math.max(0, Math.min(from, valid - 0.05));
   const startAt = when || 0;
-  src.start(startAt, at, Math.max(0.05, valid - at));   // don't play the zeroed tail
+  let at;
+  if (d.loopSeconds) {
+    // Looping: the playhead wraps, so the resume point is taken modulo the
+    // loop. No duration argument — that would stop the source at the end of
+    // the first pass.
+    at = ((from % d.loopSeconds) + d.loopSeconds) % d.loopSeconds;
+    src.loop = true;
+    src.loopStart = 0;
+    src.loopEnd = d.loopSeconds;
+    src.start(startAt, at);
+  } else {
+    at = Math.max(0, Math.min(from, valid - 0.05));
+    src.start(startAt, at, Math.max(0.05, valid - at));   // don't play the zeroed tail
+  }
   noteStarted();
   d.source = src;
   d.offset = at;
@@ -974,9 +1030,8 @@ const meterLevel = { A: 0, B: 0 };
 let aidsRaf = null;
 function playheadSeconds(id) {
   const d = decks[id];
-  if (!d.playing || !ctx) return d.offset;
-  const now = ctx.currentTime;
-  return d.offset + Math.max(0, now - d.mark) * d.rate;
+  const raw = (!d.playing || !ctx) ? d.offset : d.offset + Math.max(0, ctx.currentTime - d.mark) * d.rate;
+  return d.loopSeconds ? ((raw % d.loopSeconds) + d.loopSeconds) % d.loopSeconds : raw;
 }
 function drawWave(id) {
   const cv = $('wave' + id), d = decks[id];
@@ -1660,7 +1715,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v28';
+const APP_BUILD = 'bmt-v29';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -1739,7 +1794,7 @@ if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
     get ctx() { return ctx; }, get master() { return master; },
     get round() { return round && { ...round }; },            // copy: writes must not reach the round
     get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
-    decks, rateFor, phraseStart, deckGain, loadDeck,
+    decks, rateFor, phraseStart, deckGain, loadDeck, loopRegion,
   };
 }
 

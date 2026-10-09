@@ -249,6 +249,37 @@ house, tech house, techno, breaks; 122-140 BPM) ON THE DEVICE:
   requires the kick on the grid (ratio > 1.8, ≥90% of beats) and the first hit
   within 20 ms. Breakbeat is exempt: its kick is deliberately not on every beat.
 
+## Decks LOOP a beat-solid section (2026-10-09)
+Reported as "the demo tracks are really bad for beatmatching", and measured:
+the median track carried a running beat for only 80% of a three-minute window
+and 15 of 24 had a dead stretch of 16 s or more. Matching against a breakdown
+teaches nothing. Each track now declares loopStart/loopEnd — the longest run
+where the kick band dominates the offbeat, both ends on a 4-bar boundary —
+and loadDeck windows exactly that while startSource sets src.loop.
+- THE LOOP MUST BE A WHOLE NUMBER OF BEATS, computed in loadDeck from the
+  track's own tempo and rounded to samples. The manifest rounds to the
+  millisecond, which left one loop 0.1 beat long: every wrap shifted the grid
+  and the beat audibly jumped.
+- d.loopSeconds drives both playback and the visual-aids playhead, which must
+  wrap with it. src.start takes no duration when looping — that would stop the
+  source at the end of the first pass.
+- applyGrid carries loopStart/loopEnd out of crate.json, so a crate added
+  through the file picker gets loops too, not just the demo one.
+- tools/harness/tests/loop.html is the gate: it plays PAST the seam and
+  requires the beat to still be on the same grid afterwards, with no silence
+  that the material does not already have. 15 of 20 passed; the rest were
+  dropped rather than shipped with an audible hole every two minutes.
+
+## Measure ON THE BEAT GRID (2026-10-09)
+Three separate false results in one session came from probing between beats:
+an 8 s block is not a whole number of beats (16.27 at 122 BPM), so marching
+k·period from each block drifts a quarter-beat per block; starting playback
+"6 seconds" before a loop seam does not land on a beat; and a grid scan that
+starts at sample 0 ignores the track's anchor. Every probe must be snapped to
+anchor + n·beat. The first of these produced a headline figure — "the median
+track has a beat only 39% of the time" — that was simply wrong; the real
+number was 80%.
+
 ## Built (was roadmap 1–2, 6)
 - Headphone split toggle: StereoPannerNode per deck, A hard left / B hard right,
   off by default, persisted in the settings store.
@@ -258,7 +289,7 @@ house, tech house, techno, breaks; 122-140 BPM) ON THE DEVICE:
   rolling median of 10, difficulty filter, tap-for-pair tooltip, table view.
   Plain SVG, no library; one series so no legend; dot colour = reveal band.
   Rounds without errBpm (pre-BPM-metric records) are skipped.
-- Demo crate (2026-09-23): 24 CC tracks, 115-140 BPM, every one fetched with a
+- Demo crate (2026-10-09): 15 CC tracks, 115-140 BPM, each looping a verified beat-solid section, every one fetched with a
   RANGE request for ~220 s around its drop-in point — the player only ever uses
   180 s, so a nine-minute file is bandwidth and phone storage spent on audio
   that is never heard (141 MB for 18 tracks, where 10 uncut were 158 MB).

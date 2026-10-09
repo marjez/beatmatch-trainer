@@ -184,8 +184,11 @@ export async function tapMaster(app) {
       // envelope peak. A kick whose sub blooms 30 ms in peaks 30 ms late while
       // its transient is on time, and reading the peak flagged two perfectly
       // gridded tracks as out of phase.
+      // Search the first BAR, not the first beat: a loop can legitimately open
+      // on a bar whose first beat carries no kick, and judging phase from a
+      // near-silent beat flagged a track whose every beat was on the grid.
       let firstMs = null, peak = 0, peakAt = 0;
-      const span = Math.min(env.length, Math.round(P));
+      const span = Math.min(env.length, Math.round(P * 4));
       for (let i = 0; i < span; i++) if (env[i] > peak) { peak = env[i]; peakAt = i; }
       if (peak > 0) {
         let i = peakAt;

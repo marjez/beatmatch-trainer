@@ -1,7 +1,7 @@
 {
  "version": 2,
  "playlist": "Demo crate",
- "note": "Creative Commons tracks from netlabels on the Internet Archive. Nothing is bundled: each track is fetched from archive.org with a Range request for just the 220 s the app needs (the player only ever uses a 180 s window), then stored on your device. Every drop-in cue was VERIFIED by playing it through the app and measuring the output (tools/harness/verify_cues.html). byteStart/byteEnd come from tools/mp3_window.py, which walks real MP3 frame headers so the cut lands on a frame boundary. Tracks whose cues could not be verified were left out rather than shipped with a guess.",
+ "note": "Creative Commons tracks from netlabels on the Internet Archive. Nothing is bundled: each is fetched from archive.org with a Range request for just the part the app needs, then stored on your device. Each entry carries a LOOP — the longest stretch where the kick band carries more energy on the beats than between them, both ends on a 4-bar boundary — and the deck plays that on repeat. Real tracks have breakdowns: measured across this crate, the median track runs a beat for only 80% of a three-minute window and most have a dead stretch of 16 s or more, which is nothing to match against. Analysed by tools/harness/audit_window.html; cues verified by playing them (tools/harness/verify_cues.html).",
  "tracks": [
   {
    "file": "Raymundo Mendoza - We Lift Off'd 115.01bpm.mp3",
@@ -20,26 +20,12 @@
    "label": "unfound",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/unfound53"
-  },
-  {
-   "file": "Mthaza - Sparkling Winter 119bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_07_-_mthaza_-_sparkling_winter.mp3",
-   "byteStart": 1258763,
-   "byteEnd": 10058894,
-   "bpm": 119,
-   "anchor": 1.8099,
-   "cues": [
-    34.079,
-    66.348
-   ],
-   "artist": "Mthaza",
-   "title": "Sparkling Winter",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
+   "page": "https://archive.org/details/unfound53",
+   "loopStart": 0.826,
+   "loopEnd": 184.462,
+   "loopS": 183.6,
+   "beatRunningPct": 88,
+   "loopVerified": true
   },
   {
    "file": "Daniel Aleksandar - Evolucija u tri čina 120bpm.mp3",
@@ -58,7 +44,12 @@
    "label": "unfound",
    "license": "CC BY 4.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88"
+   "page": "https://archive.org/details/unfound88",
+   "loopStart": 112.043,
+   "loopEnd": 200.043,
+   "loopS": 88,
+   "beatRunningPct": 77,
+   "loopVerified": true
   },
   {
    "file": "Dako Loop Orchestra - Dakophazer 120bpm.mp3",
@@ -77,7 +68,12 @@
    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
    "page": "https://archive.org/details/unfound88",
    "byteStart": 2865833,
-   "byteEnd": 11665964
+   "byteEnd": 11665964,
+   "loopStart": 0.029,
+   "loopEnd": 152.029,
+   "loopS": 152,
+   "beatRunningPct": 81,
+   "loopVerified": true
   },
   {
    "file": "Sven Laux - Hoy & Monk (Original Mix) 120bpm.mp3",
@@ -96,7 +92,12 @@
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
    "page": "https://archive.org/details/miniatura031SvenLaux-HoyMonkEp",
    "byteStart": 444061,
-   "byteEnd": 9244191
+   "byteEnd": 9244191,
+   "loopStart": 1.986,
+   "loopEnd": 217.986,
+   "loopS": 216,
+   "beatRunningPct": 100,
+   "loopVerified": true
   },
   {
    "file": "Raymundo Mendoza - Wrist Watch 120bpm.mp3",
@@ -115,26 +116,12 @@
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
    "page": "https://archive.org/details/unfound53",
    "byteStart": 1581751,
-   "byteEnd": 10381111
-  },
-  {
-   "file": "Raymundo Mendoza - Toodaze 120bpm.mp3",
-   "url": "https://archive.org/download/unfound53/unfound53_02_-_raymundo_mendoza_-_toodaze.mp3",
-   "bpm": 120,
-   "anchor": 0.0409,
-   "cues": [
-    40.041,
-    80.041
-   ],
-   "artist": "Raymundo Mendoza",
-   "title": "Toodaze",
-   "release": "translations ep [unfound53]",
-   "label": "unfound",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/unfound53",
-   "byteStart": 1580787,
-   "byteEnd": 10381107
+   "byteEnd": 10381111,
+   "loopStart": 24.028,
+   "loopEnd": 216.028,
+   "loopS": 192,
+   "beatRunningPct": 100,
+   "loopVerified": true
   },
   {
    "file": "Raymundo Mendoza - Reaching 122bpm.mp3",
@@ -153,7 +140,12 @@
    "label": "unfound",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/unfound53"
+   "page": "https://archive.org/details/unfound53",
+   "loopStart": 39.868,
+   "loopEnd": 165.77,
+   "loopS": 125.9,
+   "beatRunningPct": 78,
+   "loopVerified": true
   },
   {
    "file": "Fall Apart - Everyman 122bpm.mp3",
@@ -172,7 +164,12 @@
    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
    "page": "https://archive.org/details/unfound88",
    "byteStart": 9119531,
-   "byteEnd": 17919661
+   "byteEnd": 17919661,
+   "loopStart": 0.54,
+   "loopEnd": 212.999,
+   "loopS": 212.5,
+   "beatRunningPct": 100,
+   "loopVerified": true
   },
   {
    "file": "Klaus PP & Sloxxx - Salutem 122bpm.mp3",
@@ -191,26 +188,12 @@
    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
    "page": "https://archive.org/details/unfound88",
    "byteStart": 1851250,
-   "byteEnd": 10650336
-  },
-  {
-   "file": "Vlad Antonenko - Night Groove 124bpm.mp3",
-   "url": "https://archive.org/download/gargan059VladAntonenko-Groove/gargan059_03_Vlad_Antonenko_-_Night_Groove.MP3",
-   "byteStart": 981365,
-   "byteEnd": 6261443,
-   "bpm": 124,
-   "anchor": 1.0047,
-   "cues": [
-    39.714,
-    155.843
-   ],
-   "artist": "Vlad Antonenko",
-   "title": "Night Groove",
-   "release": "Groove [gargan059]",
-   "label": "Gargan Records",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/gargan059VladAntonenko-Groove"
+   "byteEnd": 10650336,
+   "loopStart": 16.256,
+   "loopEnd": 79.207,
+   "loopS": 63,
+   "beatRunningPct": 71,
+   "loopVerified": true
   },
   {
    "file": "CJ Tari - Veintitres 124bpm.mp3",
@@ -228,7 +211,12 @@
    "label": "Miniatura",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/miniatura012CjTari-CasualidadesEp"
+   "page": "https://archive.org/details/miniatura012CjTari-CasualidadesEp",
+   "loopStart": 0.945,
+   "loopEnd": 93.848,
+   "loopS": 92.9,
+   "beatRunningPct": 75,
+   "loopVerified": true
   },
   {
    "file": "Mehta - Bngrv 124.99bpm.mp3",
@@ -247,26 +235,12 @@
    "label": "Yarn Audio",
    "license": "CC BY 4.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/yarn013"
-  },
-  {
-   "file": "Daniel Fritz - Dimensions 125bpm.mp3",
-   "url": "https://archive.org/download/unfound88/unfound88_08_-_daniel_fritz_-_dimensions.mp3",
-   "bpm": 125,
-   "anchor": 0.7673,
-   "cues": [
-    31.487,
-    146.687
-   ],
-   "artist": "Daniel Fritz",
-   "title": "Dimensions",
-   "release": "happy in novi sad [unfound88]",
-   "label": "unfound",
-   "license": "CC BY 4.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-   "page": "https://archive.org/details/unfound88",
-   "byteStart": 2085284,
-   "byteEnd": 10885414
+   "page": "https://archive.org/details/yarn013",
+   "loopStart": 131.26,
+   "loopEnd": 215.747,
+   "loopS": 84.5,
+   "beatRunningPct": 62,
+   "loopVerified": true
   },
   {
    "file": "Oilboy's aftersun - House Music Is The Answer 125bpm.mp3",
@@ -285,44 +259,12 @@
    "label": "onmp",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/onmp177"
-  },
-  {
-   "file": "Bobsan - Nine Sacred Bugs 125bpm.mp3",
-   "url": "https://archive.org/download/stroboskop016/Bobsan_-_Nine_Sacred_Bugs_B3.mp3",
-   "byteStart": 1295604,
-   "byteEnd": 8714268,
-   "bpm": 125,
-   "anchor": 0.7484,
-   "cues": [
-    77.548,
-    115.948
-   ],
-   "artist": "Bobsan",
-   "title": "Nine Sacred Bugs",
-   "release": "Vinylized Vol.1",
-   "label": "Stroboskop",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/stroboskop016"
-  },
-  {
-   "file": "Max Fader - Day Is Dying 127.56bpm.mp3",
-   "url": "https://archive.org/download/miniatura034MaxFader-Archive1.0EP/06-maxFader-DayIsDying.mp3",
-   "byteStart": 2136795,
-   "byteEnd": 10936926,
-   "bpm": 127.56,
-   "anchor": 1.7553,
-   "cues": [
-    61.962
-   ],
-   "artist": "Max Fader",
-   "title": "Day Is Dying",
-   "release": "Archive 1.0 EP [miniatura 034]",
-   "label": "Miniatura",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/miniatura034MaxFader-Archive1.0EP"
+   "page": "https://archive.org/details/onmp177",
+   "loopStart": 1.257,
+   "loopEnd": 116.457,
+   "loopS": 115.2,
+   "beatRunningPct": 59,
+   "loopVerified": true
   },
   {
    "file": "Oilboy's aftersun vs Mr.DeVo! - Discobeat 128bpm.mp3",
@@ -341,7 +283,12 @@
    "label": "onmp",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/onmp177"
+   "page": "https://archive.org/details/onmp177",
+   "loopStart": 0.974,
+   "loopEnd": 165.974,
+   "loopS": 165,
+   "beatRunningPct": 100,
+   "loopVerified": true
   },
   {
    "file": "Zinoeki - Go Deeper 129.99bpm.mp3",
@@ -360,7 +307,12 @@
    "label": "onmp",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/onmp163"
+   "page": "https://archive.org/details/onmp163",
+   "loopStart": 0.957,
+   "loopEnd": 215.127,
+   "loopS": 214.2,
+   "beatRunningPct": 100,
+   "loopVerified": true
   },
   {
    "file": "Vlad Antonenko - Dance Groove 130bpm.mp3",
@@ -379,68 +331,16 @@
    "label": "Gargan Records",
    "license": "CC BY 3.0",
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/gargan059VladAntonenko-Groove"
-  },
-  {
-   "file": "Risey - Tribal Echo (B) 133bpm.mp3",
-   "url": "https://archive.org/download/tou255/tou255b.mp3",
-   "byteStart": 1715472,
-   "byteEnd": 6995550,
-   "bpm": 133,
-   "anchor": 0.6587,
-   "cues": [
-    29.531,
-    101.711
-   ],
-   "artist": "Risey",
-   "title": "Tribal Echo (B)",
-   "release": "Tribal Echo 2009",
-   "label": "",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/tou255"
-  },
-  {
-   "file": "FM - Power Shower 135bpm.mp3",
-   "url": "https://archive.org/download/dig019_postwar_brutal_style/dig019_05_fm_-_power_shower.mp3",
-   "byteStart": 668815,
-   "byteEnd": 5948894,
-   "bpm": 135,
-   "anchor": 1.5937,
-   "cues": [
-    30.038,
-    115.372
-   ],
-   "artist": "FM",
-   "title": "Power Shower",
-   "release": "Postwar Brutal Style [dig019]",
-   "label": "Diggarama",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/dig019_postwar_brutal_style"
-  },
-  {
-   "file": "Side 9000 - Illusion 135bpm.mp3",
-   "url": "https://archive.org/download/stroboskop027/Stroboskop027_Side_9000_-_illusion_Original_320kbit.mp3",
-   "byteStart": 3387740,
-   "byteEnd": 11514364,
-   "bpm": 135,
-   "anchor": 1.5409,
-   "cues": [
-    58.43,
-    93.985
-   ],
-   "artist": "Side 9000",
-   "title": "Illusion",
-   "release": "Touch Of Light EP [stroboskop027]",
-   "label": "Stroboskop",
-   "license": "CC BY 3.0",
-   "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-   "page": "https://archive.org/details/stroboskop027"
+   "page": "https://archive.org/details/gargan059VladAntonenko-Groove",
+   "loopStart": 0.493,
+   "loopEnd": 214.647,
+   "loopS": 214.2,
+   "beatRunningPct": 100,
+   "loopVerified": true
   },
   {
    "file": "Bertha James - Techno Improv One (Edit) 139.99bpm.mp3",
-   "url": "https://archive.org/download/30-hcir-berthaJamesSplit-RWT-012/2) Bertha James - Techno Improv One (Edit).mp3",
+   "url": "https://archive.org/download/30-hcir-berthaJamesSplit-RWT-012/2%29%20Bertha%20James%20-%20Techno%20Improv%20One%20%28Edit%29.mp3",
    "byteStart": 1001964,
    "byteEnd": 9802095,
    "bpm": 139.99,
@@ -455,7 +355,12 @@
    "label": "RW-Techordings",
    "license": "CC0 1.0",
    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-   "page": "https://archive.org/details/30-hcir-berthaJamesSplit-RWT-012"
+   "page": "https://archive.org/details/30-hcir-berthaJamesSplit-RWT-012",
+   "loopStart": 158.584,
+   "loopEnd": 213.445,
+   "loopS": 54.9,
+   "beatRunningPct": 59,
+   "loopVerified": true
   }
  ]
 }
