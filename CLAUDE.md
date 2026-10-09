@@ -249,6 +249,20 @@ house, tech house, techno, breaks; 122-140 BPM) ON THE DEVICE:
   requires the kick on the grid (ratio > 1.8, ≥90% of beats) and the first hit
   within 20 ms. Breakbeat is exempt: its kick is deliberately not on every beat.
 
+## FINE pitch, because 0.05 BPM was 1.3 PIXELS (2026-10-09)
+The owner: "I can get very close on Beatmatch PRO whereas on my app I don't do
+that well." Measured on a phone-sized screen: the fader is 519 usable px, so
+at ±8% one pixel is 0.040 BPM — and the reveal's "locked" band of 0.05 BPM is
+1.3 px. The app was asking for a thumb placed inside two pixels and then
+grading it. Fine-drag helped only at 120 px sideways, which is off the fader.
+FINE (button under the crossfader) maps the whole fader to ±1% around where
+each deck currently sits: 0.0052 BPM/px, so 0.05 BPM is 9.6 px — 7.9× easier,
+measured by tools/harness/tests/fine.html. Engaging or leaving it must never
+move the deck (the test asserts the rate does not change), and the knob
+re-centres on release so the vernier never runs out of travel. The ±8%
+default and the ×2 button are untouched; selectable ranges are what modern
+decks do for the same reason.
+
 ## Decks LOOP a beat-solid section (2026-10-09)
 Reported as "the demo tracks are really bad for beatmatching", and measured:
 the median track carried a running beat for only 80% of a three-minute window
@@ -269,6 +283,16 @@ and loadDeck windows exactly that while startSource sets src.loop.
   requires the beat to still be on the same grid afterwards, with no silence
   that the material does not already have. 15 of 20 passed; the rest were
   dropped rather than shipped with an audible hole every two minutes.
+
+## Thresholds must come from the material (2026-10-09)
+latency.html detected onsets above a fixed 0.15, which sat exactly on the
+quieter synthetic tracks' first kick: sometimes it was missed and the SECOND
+beat was reported, which looked like the window starting a beat before the
+downbeat — a failure that followed the randomly dealt pair, not the code.
+Thresholds are taken from the measured peak of the window now. The same
+mistake was made in ride.html (dropout detection) and startpoint.html
+(onset counting). If a check has a magic number in it, ask what material it
+was tuned on.
 
 ## Measure ON THE BEAT GRID (2026-10-09)
 Three separate false results in one session came from probing between beats:

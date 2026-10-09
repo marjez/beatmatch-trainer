@@ -52,7 +52,12 @@ try {
     const p1 = performance.now();
     await sleep(400); await rec.settle(t1 + 0.35);
     const first = rec.firstSound(t0, 0.01);
-    const ons = rec.onsets(t0, t1);
+    // Threshold relative to what this material actually peaks at. A fixed
+    // 0.15 sat right on the quieter tracks' first kick, so sometimes it was
+    // missed and the SECOND beat was reported as the first — which looked
+    // like the window starting a beat before the downbeat.
+    const peak = rec.peak(t0, t1);
+    const ons = rec.onsets(t0, t1, Math.max(0.04, peak * 0.4));
     const gaps = ons.slice(1).map((t, i) => (t - ons[i]) * 1000);
     const period = 60 / track(id).bpm / bmt.rateFor(id) * 1000;
     const out = {

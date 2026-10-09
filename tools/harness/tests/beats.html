@@ -41,7 +41,9 @@ try {
       // Breakbeat is the one pattern whose kick is not on every beat, by design.
       const fourToFloor = !/Breakbeat/.test(tr.name);
       if (fourToFloor && (!(s.ratio > 1.8) || s.onGridHits < s.beats * 0.9)) fail('generated beat is not on the grid', rec1);
-      if (phase > 20) fail('generated beat does not start on the beat', rec1);
+      // Breakbeat's kicks are deliberately not on every beat, so "the first
+      // kick is a beat late" is the pattern, not a fault.
+      if (fourToFloor && phase > 20) fail('generated beat does not start on the beat', rec1);
       pev(w, g('play' + id), 'pointerdown'); await sleep(100);
     }
   }
