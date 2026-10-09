@@ -29,88 +29,112 @@ function rng(seed) {
 }
 
 // ---------- voices ----------
-// Each writes into `out` at sample `at`, additively.
+// Each voice is rendered ONCE into a table and then mixed in by addition.
+// Generating every hit sample-by-sample cost 13 SECONDS per deck on a
+// throttled CPU — the Play button sat dead that whole time, which is what
+// "the beats don't play" was. A kick is the same 20 000 samples every time it
+// lands; computing its sine 96 times over is the whole bill.
+const tables = new Map();
+function table(key, seconds, sr, fill) {
+  const k = key + '|' + sr;
+  let t = tables.get(k);
+  if (!t) { t = new Float32Array(Math.floor(seconds * sr)); fill(t); tables.set(k, t); }
+  return t;
+}
+function mix(out, at, src, gain) {
+  if (at < 0) return;
+  const n = Math.min(src.length, out.length - at);
+  for (let i = 0; i < n; i++) out[at + i] += src[i] * gain;
+}
+export function clearTables() { tables.clear(); }      // for tests
+
+// Each builds into `out` at sample `at`, additively.
 function kick(out, at, sr, { gain = 1, decay = 26, from = 160, to = 48, click = 0.5, sweep = 55 } = {}) {
-  const n = Math.min(out.length - at, Math.floor(0.42 * sr));
-  if (n <= 0) return;
-  let phase = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    const env = Math.exp(-t * decay);
-    // Pitch sweep: the drop from `from` to `to` is what makes a kick read as a
-    // hit rather than a tone, and the fast head gives it a countable transient.
-    const f = to + (from - to) * Math.exp(-t * sweep);
-    phase += TAU * f / sr;
-    let v = Math.sin(phase) * env;
-    if (click && t < 0.006) v += click * (1 - t / 0.006) * Math.sin(TAU * 1800 * t);
-    out[at + i] += v * gain;
-  }
+  const t0 = table(`k${decay}:${from}:${to}:${click}:${sweep}`, 0.42, sr, buf => {
+    let phase = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const t = i / sr;
+      const env = Math.exp(-t * decay);
+      // Pitch sweep: the drop from `from` to `to` is what makes a kick read as
+      // a hit rather than a tone, and the fast head gives it a countable
+      // transient.
+      const f = to + (from - to) * Math.exp(-t * sweep);
+      phase += TAU * f / sr;
+      buf[i] = Math.sin(phase) * env;
+      if (click && t < 0.006) buf[i] += click * (1 - t / 0.006) * Math.sin(TAU * 1800 * t);
+    }
+  });
+  mix(out, at, t0, gain);
 }
 
 function snare(out, at, sr, rand, { gain = 0.5, decay = 30, tone = 190 } = {}) {
-  const n = Math.min(out.length - at, Math.floor(0.22 * sr));
-  if (n <= 0) return;
-  let phase = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    const env = Math.exp(-t * decay);
-    phase += TAU * tone / sr;
-    const body = Math.sin(phase) * 0.5;
-    const noise = (rand() * 2 - 1);
-    out[at + i] += (body + noise * 0.8) * env * gain;
-  }
+  const t0 = table(`s${decay}:${tone}`, 0.22, sr, buf => {
+    let phase = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const t = i / sr;
+      const env = Math.exp(-t * decay);
+      phase += TAU * tone / sr;
+      buf[i] = (Math.sin(phase) * 0.5 + (rand() * 2 - 1) * 0.8) * env;
+    }
+  });
+  mix(out, at, t0, gain);
 }
 
 function hat(out, at, sr, rand, { gain = 0.16, decay = 120, open = false } = {}) {
-  const n = Math.min(out.length - at, Math.floor((open ? 0.16 : 0.035) * sr));
-  if (n <= 0) return;
   const d = open ? decay * 0.22 : decay;
-  let hp = 0, prev = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    const x = rand() * 2 - 1;
-    hp = 0.86 * (hp + x - prev);          // one-pole high-pass: metallic, not hissy
-    prev = x;
-    out[at + i] += hp * Math.exp(-t * d) * gain;
-  }
+  const t0 = table(`h${d}:${open}`, open ? 0.16 : 0.035, sr, buf => {
+    let hp = 0, prev = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const x = rand() * 2 - 1;
+      hp = 0.86 * (hp + x - prev);        // one-pole high-pass: metallic, not hissy
+      prev = x;
+      buf[i] = hp * Math.exp(-(i / sr) * d);
+    }
+  });
+  mix(out, at, t0, gain);
 }
 
 function clap(out, at, sr, rand, { gain = 0.42 } = {}) {
   // Three fast repeats then a body — what makes a clap sound like hands.
-  for (const [off, g] of [[0, 0.6], [0.011, 0.8], [0.022, 1]]) {
-    const start = at + Math.floor(off * sr);
-    const n = Math.min(out.length - start, Math.floor(0.18 * sr));
-    for (let i = 0; i < n; i++) {
-      const t = i / sr;
-      let hp = (rand() * 2 - 1);
-      out[start + i] += hp * Math.exp(-t * (off === 0.022 ? 22 : 90)) * gain * g;
+  const t0 = table('c', 0.21, sr, buf => {
+    for (const [off, g, dec] of [[0, 0.6, 90], [0.011, 0.8, 90], [0.022, 1, 22]]) {
+      const start = Math.floor(off * sr);
+      for (let i = 0; start + i < buf.length && i < Math.floor(0.18 * sr); i++) {
+        buf[start + i] += (rand() * 2 - 1) * Math.exp(-(i / sr) * dec) * g;
+      }
     }
-  }
+  });
+  mix(out, at, t0, gain);
 }
 
 function bass(out, at, sr, freq, seconds, { gain = 0.35, decay = 7 } = {}) {
-  const n = Math.min(out.length - at, Math.floor(seconds * sr));
-  if (n <= 0) return;
-  let phase = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    phase += TAU * freq / sr;
-    // Slightly saturated sine: audible on a phone speaker, still low.
-    const v = Math.tanh(Math.sin(phase) * 1.6) * Math.exp(-t * decay) * (1 - Math.exp(-t * 400));
-    out[at + i] += v * gain;
-  }
+  // Rounded so a walking bassline reuses a handful of tables rather than
+  // rendering a fresh note every bar.
+  const f = Math.round(freq * 4) / 4, len = Math.round(seconds * 50) / 50;
+  const t0 = table(`b${f}:${len}:${decay}`, len, sr, buf => {
+    let phase = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const t = i / sr;
+      phase += TAU * f / sr;
+      // Slightly saturated sine: audible on a phone speaker, still low.
+      buf[i] = Math.tanh(Math.sin(phase) * 1.6) * Math.exp(-t * decay) * (1 - Math.exp(-t * 400));
+    }
+  });
+  mix(out, at, t0, gain);
 }
 
 function stab(out, at, sr, freq, seconds, { gain = 0.14 } = {}) {
-  const n = Math.min(out.length - at, Math.floor(seconds * sr));
-  if (n <= 0) return;
-  let p1 = 0, p2 = 0, p3 = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    const env = Math.exp(-t * 9) * (1 - Math.exp(-t * 300));
-    p1 += TAU * freq / sr; p2 += TAU * freq * 1.26 / sr; p3 += TAU * freq * 1.5 / sr;
-    out[at + i] += (Math.sin(p1) + Math.sin(p2) * 0.7 + Math.sin(p3) * 0.5) * env * gain * 0.4;
-  }
+  const f = Math.round(freq), len = Math.round(seconds * 50) / 50;
+  const t0 = table(`st${f}:${len}`, len, sr, buf => {
+    let p1 = 0, p2 = 0, p3 = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const t = i / sr;
+      const env = Math.exp(-t * 9) * (1 - Math.exp(-t * 300));
+      p1 += TAU * f / sr; p2 += TAU * f * 1.26 / sr; p3 += TAU * f * 1.5 / sr;
+      buf[i] = (Math.sin(p1) + Math.sin(p2) * 0.7 + Math.sin(p3) * 0.5) * env * 0.4;
+    }
+  });
+  mix(out, at, t0, gain);
 }
 
 // ---------- patterns ----------
@@ -245,9 +269,14 @@ export function renderBeat(out, { bpm, pattern = 'house', seed = 1, root = 55, s
     };
     P.render(ctx);
   }
-  // Gentle ceiling: voices are additive and a kick landing with a bass note can
-  // otherwise poke past full scale before the 0.5 master bus ever sees it.
-  for (let i = 0; i < total; i++) out[i] = Math.tanh(out[i] * 0.8);
+  // Gentle ceiling where it is actually needed: voices are additive and a kick
+  // landing with a bass note can poke past full scale before the 0.5 master bus
+  // sees it. tanh on all 8.6 million samples was pure cost — below 0.7 it is
+  // within a percent of the identity.
+  for (let i = 0; i < total; i++) {
+    const v = out[i] * 0.8;
+    out[i] = v > 0.7 || v < -0.7 ? Math.tanh(v) : v;
+  }
 }
 
 // A set worth practising on: every pattern at a few tempos, spread so that any

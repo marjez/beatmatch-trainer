@@ -238,6 +238,13 @@ house, tech house, techno, breaks; 122-140 BPM) ON THE DEVICE:
   on offbeat bass set bassOct/bassGain to move it up and out of the way.
 - Swing SHIFTS an odd 16th by a fraction of a step. Multiplying the position by
   (1+swing) scales it, so step 15 landed nearly two steps late.
+- VOICES ARE CACHED TABLES. Rendering each hit sample-by-sample took 13 SECONDS
+  per deck at a 6× CPU throttle — the Play button sat dead that whole time,
+  which is what "the practice beats don't play" was. A kick is the same 20 000
+  samples every time it lands. With tables it is 12-53 ms. tools/harness/
+  pw_slow_phone.mjs is the regression test: real touch, 6× throttle, and a
+  RELOAD before playing, because the in-page tests add and play in one fast
+  session and never saw it.
 - tools/harness/tests/beats.html plays every pattern through the app and
   requires the kick on the grid (ratio > 1.8, ≥90% of beats) and the first hit
   within 20 ms. Breakbeat is exempt: its kick is deliberately not on every beat.
