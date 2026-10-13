@@ -47,6 +47,18 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
   jump-to-finger threw the value wherever you touched, and relative-from-anywhere
   let the knob drift away from the finger until you were dragging at the top of
   the fader while the knob sat at the bottom. Don't go back to either.
+- A control the thumb cannot reach is not shipped. tools/harness/pw_layout.mjs
+  loads a real round at four viewports (390x844, 375x667, 430x932, and landscape
+  844x390) and requires every mixer control to be rendered, on screen, at least
+  22 px, and to actually receive a tap at its own centre — tests/fine.html
+  clicks #fineBtn directly, so it passed while a screenshot appeared to show no
+  FINE button at all (it was there, under the toast). Controls inside #sheet are
+  skipped: the sheet is the one surface allowed to scroll.
+- .fader-track has min-height 150px so the fader stays precise. On a landscape
+  phone the viewport cannot give it that and the track OVERFLOWED its channel
+  panel — scale and knob drawn across the nudge and cue rows. Under
+  (orientation: landscape) and (max-height: 620px) the floor is dropped instead.
+  The manifest asks for portrait; installed to the home screen iOS honours it.
 - Pitch faders have fine-drag: horizontal distance from the fader scales vertical
   sensitivity, with a 36 px DEAD ZONE first (1/(1+max(0,|dx|−36)/30)): on the
   phone a thumb moving straight down drifts 20-40 px sideways and fine mode was
@@ -370,6 +382,13 @@ number was 80%.
   Chrome. make_test_audio.py --crate synthesises a whole gridded crate with
   known BPMs and downbeats, so no test depends on the owner's crate. The app
   exposes read-only handles on window.__bmt for the harness only.
+- The phone-test link is a SYSTEMD USER SERVICE, bmt-serve.service, serving
+  /home/claudecode/bmt-serve (a git archive export of the committed branch) on
+  :8080. It used to be a background process owned by the Claude session, so it
+  died when the session ended and the owner's next visit to the link just
+  failed — "it's not working". Redeploy = re-export into that directory; the
+  unit needs no restart. http://100.110.176.56:8080/ over Tailscale,
+  http://192.168.1.81:8080/ on the LAN.
 - MAC-ONLY, and can't move: the crate itself lives in iCloud Drive and
   rekordbox.xml is exported there, so crate_sync.py / rekordbox_export.py only
   make sense on the Mac. They also shell out to afconvert, which is macOS-only —

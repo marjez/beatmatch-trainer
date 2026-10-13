@@ -123,7 +123,17 @@ def make_crate(out, n, seed, seconds):
         name = f"Synth {cluster.title()} {i + 1:02d} {bpm:g}bpm.wav"
         buf, beats = render(bpm, seconds, intro, snare, hat_amp, rng)
         size = write_wav(os.path.join(out, name), buf)
-        manifest.append({"file": name, "bpm": bpm, "anchor": intro, "cues": []})
+        # A loop, so tests/loop.html can run WITHOUT the downloaded demo crate —
+        # until now the loop gate only existed against archive.org audio, which
+        # means the whole-number-of-beats rule was unguarded on a clean checkout.
+        # The beat runs from the anchor to the end here, so the loop is simply
+        # the longest whole number of 4-bar phrases that fits.
+        phrase = 16 * 60.0 / bpm
+        phrases = max(8, int((seconds - intro - 1) / phrase))
+        manifest.append({"file": name, "bpm": bpm, "anchor": intro, "cues": [],
+                         "loopStart": round(intro, 3),
+                         "loopEnd": round(intro + phrases * phrase, 3),
+                         "loopS": round(phrases * phrase, 3)})
         truth.append({"file": name, "bpm": bpm, "anchor": intro, "seconds": seconds,
                       "snare": snare, "beats": len(beats)})
         files.append(name)

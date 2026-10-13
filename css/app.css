@@ -179,6 +179,13 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 /* The pitch fader is the instrument here — give it the width and let level be
    the thin one. Wider track means a wider knob and steadier thumb control. */
 .pitch-track { width: 78px; }
+/* A short viewport (landscape phone) cannot give the track its 150 px floor,
+   and the track then overflowed its own channel panel: the scale and knob drew
+   across the nudge buttons and the cue row. The floor exists to keep the fader
+   precise, which FINE now does far better, so let it shrink instead of spill. */
+@media (orientation: landscape) and (max-height: 620px) {
+  .fader-track { min-height: 0; }
+}
 .fader-scale { position: absolute; inset: 0; }
 .fader-tick { position: absolute; left: 5px; right: 5px; height: 1px; background: #3a3f4a; }
 .fader-tick.zero { background: var(--alloy-dim); height: 2px; }

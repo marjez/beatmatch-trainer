@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v30';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v31';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -1752,7 +1752,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v30';
+const APP_BUILD = 'bmt-v31';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
