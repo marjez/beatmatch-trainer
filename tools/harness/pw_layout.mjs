@@ -1,13 +1,12 @@
 /**
  * pw_layout.mjs — is every mixer control ON SCREEN and under the thumb?
  *
- * tests/fine.html passes by clicking #fineBtn directly, which says nothing
- * about whether a finger can reach it: the mixer is a fixed, non-scrolling
- * surface, so a control pushed past the viewport is simply gone, and one
- * sitting under an overlay or the toast is just as unreachable. A screenshot
- * of v30 appeared not to show the FINE button at all, which is what prompted
- * this — it turned out to be there (y=761 of 844) with the toast over it, but
- * nothing in the suite could have told the difference.
+ * Every other test drives controls by clicking the element directly, which says
+ * nothing about whether a finger can reach it: the mixer is a fixed,
+ * non-scrolling surface, so a control pushed past the viewport is simply gone,
+ * and one sitting under an overlay or the toast is just as unreachable. A v30
+ * screenshot appeared not to show a button that was in fact on screen under the
+ * toast, and nothing in the suite could have told the difference.
  *
  * Controls inside #sheet are SKIPPED: the sheet is the one scrolling surface,
  * so its contents are legitimately below the fold while it is closed.
@@ -41,7 +40,7 @@ const browser = await chromium.launch({ headless: true, env, args: ['--no-sandbo
 
 // Everything a round is played with. If one of these is unreachable the app is
 // broken on that screen however well the logic tests do.
-const CONTROLS = ['fineBtn', 'playA', 'playB', 'cueA', 'cueB', 'xfTrack', 'xfKnob',
+const CONTROLS = ['playA', 'playB', 'cueA', 'cueB', 'xfTrack', 'xfKnob',
                   'faderTrackA', 'faderTrackB', 'faderKnobA', 'faderKnobB',
                   'nudgeUpA', 'nudgeDownA', 'nudgeUpB', 'nudgeDownB',
                   'focusBtn', 'newPairBtn', 'revealBtn', 'menuBtn'];

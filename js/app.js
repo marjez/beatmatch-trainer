@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v31';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v32';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -1116,30 +1116,12 @@ function setAids(on) {
 // times a pair genuinely needs more room; it does not change the hidden offset,
 // so rounds are no easier — it only buys headroom.
 const BASE_RANGE = 8;
-// FINE (vernier) mode. Measured on a phone: the fader is 519 usable px, so at
-// ±8% one pixel is 0.040 BPM and the "locked" band of 0.05 BPM is 1.3 PIXELS.
-// No thumb can do that, which is why the app felt impossible to score well on
-// while other trainers do not. In fine mode the whole fader maps to ±1%
-// around where the deck already sits — 0.0049 BPM/px, so 0.05 BPM is 10 px —
-// and the knob re-centres on release so you never run out of travel.
-// Modern decks (1210 MK7, CDJs) have selectable ranges for exactly this; the
-// ±8% default is untouched.
-const FINE_SPAN = 1;
-let fineMode = false;
-const fineCentre = { A: 0, B: 0 };
-function pitchMap(id) {
-  if (!fineMode) return { lo: -pitchRange, hi: pitchRange };
-  const c = fineCentre[id];
-  return { lo: Math.max(-pitchRange, c - FINE_SPAN), hi: Math.min(pitchRange, c + FINE_SPAN) };
-}
-function setFineMode(on) {
-  fineMode = on;
-  for (const id of DECKS) fineCentre[id] = decks[id].fader;
-  const btn = $('fineBtn');
-  btn.classList.toggle('on', on);
-  btn.setAttribute('aria-pressed', String(on));
-  for (const id of DECKS) { buildScale(id); renderPitch(id); }
-}
+// The fader maps to the whole range and nothing else — a 1210's does too.
+// A FINE/vernier button lived here briefly (v30) and was removed on request:
+// Beatmatch PRO has no such control and is not hard to score well on, so the
+// 1.3-px locked band it was built to widen is not what makes the app harder.
+// Don't re-add a second pitch mapping without first establishing what is.
+function pitchMap() { return { lo: -pitchRange, hi: pitchRange }; }
 // Zero LAMP, not a detent: nothing snaps (see CLAUDE.md — a detent you can feel
 // is one you can't be precise inside). Sized in BPM, not percent, because 0.1 BPM
 // is the accuracy being trained for and a fixed percentage can't promise that —
@@ -1154,7 +1136,7 @@ function detentPct() {
 function buildScale(id) {
   const scale = $('faderScale' + id);
   scale.innerHTML = '';
-  const { lo, hi } = pitchMap(id);
+  const { lo, hi } = pitchMap();
   const span = hi - lo;
   const step = span / 8;
   for (let i = 0; i <= 8; i++) {
@@ -1182,7 +1164,6 @@ function setPitchRange(range) {
   btn.setAttribute('aria-pressed', String(pitchRange > BASE_RANGE));
   for (const id of DECKS) {
     decks[id].fader = Math.max(-pitchRange, Math.min(pitchRange, decks[id].fader));
-    fineCentre[id] = decks[id].fader;
     buildScale(id);
     renderPitch(id);
     applyRate(id);
@@ -1215,7 +1196,7 @@ function renderPitch(id) {
   if (!faderPx[id]) measureFaders();
   const m = faderPx[id];
   const h = m.pitchH - m.pitchKnob;
-  const { lo, hi } = pitchMap(id);
+  const { lo, hi } = pitchMap();
   const frac = Math.max(0, Math.min(1, (d.fader - lo) / (hi - lo)));
   knob.style.transform = `translate3d(0, ${frac * h}px, 0)`;
   const shown = d.fader + d.nudge;
@@ -1335,7 +1316,7 @@ function renderProfile() {
 const GRAB_SLOP = 28;          // px of extra hit area around the knob
 // axis 'y' for the vertical pitch faders, 'x' for the crossfader. Fine-drag
 // only makes sense on a vertical fader (sideways distance scales it).
-function bindFader(track, knob, { get, set, fine = false, onFine = null, onRelease = null, axis = 'y' }) {
+function bindFader(track, knob, { get, set, fine = false, onFine = null, axis = 'y' }) {
   let dragging = false, grabOffset = 0, virtual = 0, last = 0, box = null, pendingFine = 1;
   const vertical = axis === 'y';
   const along = e => vertical ? e.clientY : e.clientX;
@@ -1390,7 +1371,6 @@ function bindFader(track, knob, { get, set, fine = false, onFine = null, onRelea
     dragging = false; box = null; ownerId = null;
     knob.classList.remove('grabbed');
     if (onFine) onFine(1);
-    if (onRelease) onRelease();
     dragProfiler.finish();
   };
   track.addEventListener('pointerup', end);
@@ -1399,16 +1379,13 @@ function bindFader(track, knob, { get, set, fine = false, onFine = null, onRelea
 
 for (const id of DECKS) {
   bindFader($('faderTrack' + id), $('faderKnob' + id), {
-    get: () => { const { lo, hi } = pitchMap(id); return (decks[id].fader - lo) / (hi - lo); },
+    get: () => { const { lo, hi } = pitchMap(); return (decks[id].fader - lo) / (hi - lo); },
     set: frac => {
-      const { lo, hi } = pitchMap(id);
+      const { lo, hi } = pitchMap();
       decks[id].fader = +Math.max(-pitchRange, Math.min(pitchRange, lo + frac * (hi - lo))).toFixed(4);
       renderPitch(id);
       applyRate(id);      // AudioParam write — safe on every move, no glitch
     },
-    // Re-centre on release so the vernier never runs out of travel: the value
-    // does not move, only the scale under it.
-    onRelease: () => { if (fineMode) { fineCentre[id] = decks[id].fader; buildScale(id); renderPitch(id); } },
     fine: true,
     onFine: f => $('pitchReadout' + id).classList.toggle('fine', f < 0.9),
   });
@@ -1708,7 +1685,6 @@ $('rangeBtn').addEventListener('click', () => {
   setPitchRange(pitchRange > BASE_RANGE ? BASE_RANGE : BASE_RANGE * 2);
   db.setSetting('pitchRange', pitchRange).catch(() => {});
 });
-$('fineBtn').addEventListener('click', () => setFineMode(!fineMode));
 function setSplit(on) {
   split = on;
   [...$('splitSeg').children].forEach(b => b.classList.toggle('on', (b.dataset.split === 'on') === on));
@@ -1752,7 +1728,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v31';
+const APP_BUILD = 'bmt-v32';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -1832,7 +1808,6 @@ if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
     get round() { return round && { ...round }; },            // copy: writes must not reach the round
     get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
     decks, rateFor, phraseStart, deckGain, loadDeck, loopRegion, pitchMap,
-  get fineMode() { return fineMode; }, setFineMode,
   };
 }
 

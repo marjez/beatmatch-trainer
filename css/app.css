@@ -182,7 +182,7 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 /* A short viewport (landscape phone) cannot give the track its 150 px floor,
    and the track then overflowed its own channel panel: the scale and knob drew
    across the nudge buttons and the cue row. The floor exists to keep the fader
-   precise, which FINE now does far better, so let it shrink instead of spill. */
+   precise, but a landscape phone has no room to be precise in either way. */
 @media (orientation: landscape) and (max-height: 620px) {
   .fader-track { min-height: 0; }
 }
@@ -261,14 +261,6 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 
 /* Crossfader: horizontal, grabbed by its knob like the pitch faders. The knob
    is a vertical bar with a centre line, and a tick marks the centre position. */
-.xf-row { display: flex; justify-content: center; flex-shrink: 0; }
-.fine-btn {
-  padding: 7px 22px; border-radius: 7px; cursor: pointer;
-  background: var(--platter); border: 1px solid var(--edge); color: var(--alloy-dim);
-  font-family: var(--font-display); font-size: 10px; font-weight: 700;
-  letter-spacing: 0.14em; text-transform: uppercase;
-}
-.fine-btn.on { color: var(--amber); border-color: var(--amber); background: #2b2f38; }
 
 .xfader { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 2px; }
 .xf-label {

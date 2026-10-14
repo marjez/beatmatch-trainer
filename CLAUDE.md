@@ -50,10 +50,10 @@ offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 - A control the thumb cannot reach is not shipped. tools/harness/pw_layout.mjs
   loads a real round at four viewports (390x844, 375x667, 430x932, and landscape
   844x390) and requires every mixer control to be rendered, on screen, at least
-  22 px, and to actually receive a tap at its own centre — tests/fine.html
-  clicks #fineBtn directly, so it passed while a screenshot appeared to show no
-  FINE button at all (it was there, under the toast). Controls inside #sheet are
-  skipped: the sheet is the one surface allowed to scroll.
+  22 px, and to actually receive a tap at its own centre. Every other test
+  clicks elements directly, so one can pass while the control is off screen or
+  under the toast. Controls inside #sheet are skipped: the sheet is the one
+  surface allowed to scroll.
 - .fader-track has min-height 150px so the fader stays precise. On a landscape
   phone the viewport cannot give it that and the track OVERFLOWED its channel
   panel — scale and knob drawn across the nudge and cue rows. Under
@@ -261,19 +261,21 @@ house, tech house, techno, breaks; 122-140 BPM) ON THE DEVICE:
   requires the kick on the grid (ratio > 1.8, ≥90% of beats) and the first hit
   within 20 ms. Breakbeat is exempt: its kick is deliberately not on every beat.
 
-## FINE pitch, because 0.05 BPM was 1.3 PIXELS (2026-10-09)
-The owner: "I can get very close on Beatmatch PRO whereas on my app I don't do
-that well." Measured on a phone-sized screen: the fader is 519 usable px, so
-at ±8% one pixel is 0.040 BPM — and the reveal's "locked" band of 0.05 BPM is
-1.3 px. The app was asking for a thumb placed inside two pixels and then
-grading it. Fine-drag helped only at 120 px sideways, which is off the fader.
-FINE (button under the crossfader) maps the whole fader to ±1% around where
-each deck currently sits: 0.0052 BPM/px, so 0.05 BPM is 9.6 px — 7.9× easier,
-measured by tools/harness/tests/fine.html. Engaging or leaving it must never
-move the deck (the test asserts the rate does not change), and the knob
-re-centres on release so the vernier never runs out of travel. The ±8%
-default and the ×2 button are untouched; selectable ranges are what modern
-decks do for the same reason.
+## No FINE button — removed on request (2026-10-14)
+A FINE (vernier) button shipped in v30 and was taken out in v32. The
+measurement behind it still stands: on a phone the pitch fader is 519 usable
+px, so at ±8% one pixel is 0.040 BPM and the reveal's "locked" band of 0.05 BPM
+is 1.3 PIXELS. FINE mapped the whole fader to ±1% around where each deck sat,
+which made that band 9.6 px.
+
+The owner removed it anyway: "Beatmatch PRO doesn't have that and somehow it
+works ok." That is the decisive fact — the competitor has one pitch mapping and
+is not hard to score well on, so a 1.3-px band is NOT what makes this app
+harder than it. Whatever the real difference is has not been found yet; do not
+re-add a second pitch mapping (vernier, selectable range, zoomed scale) as a
+way of papering over it. The ±8% default and the ×2 button are unchanged, and
+fine-drag — sliding sideways while dragging — is a DIFFERENT, older feature
+that stays (see the Layout rules).
 
 ## Decks LOOP a beat-solid section (2026-10-09)
 Reported as "the demo tracks are really bad for beatmatching", and measured:
