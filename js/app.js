@@ -2,7 +2,7 @@
 // Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
 // score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v32';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v33';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -337,13 +337,65 @@ fileInput.addEventListener('change', async (e) => {
 // request and stored like any other track, with its credit kept on the record
 // so attribution can be shown. Fetched one at a time so a phone never holds
 // more than one download in memory on top of the crate.
+// Demo tracks already on the phone are brought in line with demo/crate.json.
+// They never were: loadDemoCrate skips any name it already has, so a phone that
+// loaded the crate before v30 kept all 24-25 old records — the 9-10 tracks that
+// were cut for being bad to match against, and 15 records with no loop points —
+// and the button only ever said "already loaded". Reported as "the tracks are
+// not refreshing".
+// No download is needed when the stored audio is the same slice the manifest
+// names (same byte count): only the grid, cues and loop are patched. A record
+// whose slice differs, or that the manifest no longer lists, is removed;
+// loadDemoCrate fetches whatever is then missing.
+// Demo records are the ones carrying a licence credit — files the owner adds
+// never do, so their own tracks are never touched.
+async function syncDemoCrate() {
+  const demo = tracks.filter(t => t.credit && t.credit.license && !t.synth);
+  if (!demo.length) return { removed: 0, updated: 0 };
+  let manifest;
+  try { manifest = await (await fetch('demo/crate.json', { cache: 'no-cache' })).json(); }
+  catch { return { removed: 0, updated: 0 }; }       // offline: leave everything as it is
+  const byName = new Map((manifest.tracks || [])
+    .filter(m => m && typeof m.file === 'string')
+    .map(m => [m.file.replace(/\.[^.]+$/, ''), m]));
+  if (!byName.size) return { removed: 0, updated: 0 };
+  let removed = 0, updated = 0;
+  const gone = new Set();
+  for (const rec of demo) {
+    const m = byName.get(rec.name);
+    // A whole-file entry has no range to compare against, so the record is kept.
+    const ranged = m && Number.isFinite(m.byteStart) && Number.isFinite(m.byteEnd);
+    const sameAudio = m && rec.blob && (!ranged || rec.blob.size === m.byteEnd - m.byteStart);
+    if (!sameAudio) {
+      await db.deleteTrack(rec.id);
+      gone.add(rec.id);
+      removed++;
+      continue;
+    }
+    const want = {
+      bpm: m.bpm, anchor: typeof m.anchor === 'number' ? m.anchor : null, cues: m.cues || null,
+      loopStart: m.loopStart, loopEnd: m.loopEnd,
+      credit: { artist: m.artist, title: m.title, release: m.release, label: m.label, license: m.license, licenseUrl: m.licenseUrl, page: m.page },
+    };
+    if (Object.keys(want).some(k => JSON.stringify(rec[k] ?? null) !== JSON.stringify(want[k] ?? null))) {
+      Object.assign(rec, want);
+      await db.updateTrack(rec);
+      updated++;
+    }
+  }
+  if (gone.size) tracks = tracks.filter(t => !gone.has(t.id));
+  return { removed, updated, missing: [...byName.keys()].filter(n => !tracks.some(t => t.name === n)).length };
+}
+
 let demoLoading = false;
 async function loadDemoCrate() {
   if (demoLoading) return;
   const btn = $('demoBtn');
   demoLoading = true; btn.disabled = true;
-  let added = 0, failed = 0;
+  let added = 0, failed = 0, synced = { removed: 0, updated: 0 };
   try {
+    synced = await syncDemoCrate();
+    if (synced.removed || synced.updated) { renderLibrary(); if (round) startRound(); }
     const manifest = await (await fetch('demo/crate.json', { cache: 'no-cache' })).json();
     const list = manifest.tracks || [];
     for (let i = 0; i < list.length; i++) {
@@ -383,9 +435,11 @@ async function loadDemoCrate() {
   }
   demoLoading = false; btn.disabled = false;
   btn.textContent = 'Load the demo crate';
+  const fixed = synced.removed + synced.updated;
   if (added) toast(`${added} demo track${added > 1 ? 's' : ''} added${failed ? `, ${failed} failed` : ''}.`);
   else if (failed) toast(`Could not download the demo tracks (${failed} failed) — check the connection and try again.`);
-  else toast('The demo crate is already loaded.');
+  else if (fixed) toast(`Demo crate updated: ${synced.updated} refreshed, ${synced.removed} removed.`);
+  else toast('The demo crate is already up to date.');
   renderLibrary();
   updateButtons();
 }
@@ -603,6 +657,30 @@ function pickHidden() {
   return (Math.random() < 0.5 ? -1 : 1) * mag;
 }
 
+// New pair deals the tracks you have heard least recently. Picking a random
+// PAIR, as it used to, repeats itself: measured over the practice beats alone,
+// 36% of new rounds reused a track from the round before (16% on the full
+// crate), and tracks in a dense BPM cluster belong to more pairs, so they came
+// round far more often than the rest. Now deck 1 is the track dealt longest ago
+// that has a partner, deck 2 the partner dealt longest ago, ties broken at
+// random — every track plays before any comes back, as far as tempo allows.
+const lastDealt = new Map();
+let dealCount = 0;
+function dealFresh(pairs) {
+  const age = t => lastDealt.get(t.id) ?? -1;
+  const oldest = list => {
+    const min = Math.min(...list.map(age));
+    const pool = list.filter(t => age(t) === min);
+    return pool[Math.floor(Math.random() * pool.length)];
+  };
+  const a = oldest([...new Set(pairs.map(p => p[0]))]);
+  const b = oldest(pairs.filter(p => p[0] === a).map(p => p[1]));
+  dealCount++;
+  lastDealt.set(a.id, dealCount);
+  lastDealt.set(b.id, dealCount);
+  return [a, b];
+}
+
 function startRound(keepPair = false) {
   stopDeck('A'); stopDeck('B');
   let a, b;
@@ -616,7 +694,7 @@ function startRound(keepPair = false) {
       toast(`No two tracks are within ±${pitchRange}% of each other — add closer BPMs, or tap ×2 to widen the range.`);
       return;
     }
-    [a, b] = pairs[Math.floor(Math.random() * pairs.length)];
+    [a, b] = dealFresh(pairs);
   }
   const r0 = a.bpm / b.bpm;
   let hidden, needed;
@@ -1728,7 +1806,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v32';
+const APP_BUILD = 'bmt-v33';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -1807,7 +1885,7 @@ if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
     get ctx() { return ctx; }, get master() { return master; },
     get round() { return round && { ...round }; },            // copy: writes must not reach the round
     get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
-    decks, rateFor, phraseStart, deckGain, loadDeck, loopRegion, pitchMap,
+    decks, rateFor, phraseStart, deckGain, loadDeck, loopRegion, pitchMap, syncDemoCrate,
   };
 }
 
@@ -1839,6 +1917,14 @@ async function init() {
   if (canStart()) startRound();
   // An empty mixer has no visible way in, so show the crate on first run.
   if (!tracks.length) openSheet(true);
+  syncDemoCrate().then(r => {
+    if (!r.removed && !r.updated) return;
+    renderLibrary();
+    updateButtons();
+    if (!decks.A.playing && !decks.B.playing) { round = null; if (canStart()) startRound(); }
+    const more = r.missing ? ` Tap Load the demo crate for ${r.missing} more.` : '';
+    toast(`Demo crate updated: ${r.updated} refreshed, ${r.removed} removed.${more}`);
+  }).catch(() => {});
   $('buildStamp').textContent = `build ${APP_BUILD}`;
   registerSW();
 }

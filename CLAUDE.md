@@ -298,6 +298,34 @@ and loadDeck windows exactly that while startSource sets src.loop.
   that the material does not already have. 15 of 20 passed; the rest were
   dropped rather than shipped with an audible hole every two minutes.
 
+## Shipped content must reach phones that already have it (2026-10-15)
+"The tracks are not refreshing." loadDemoCrate skipped every name already in
+IndexedDB, so a phone that loaded the demo crate before v30 kept all 24-25 old
+records: the 9-10 tracks cut for being bad to match against, and 15 records
+with no loop points. Every fix to the crate since then had never reached the
+owner's phone, and the button said "already loaded".
+syncDemoCrate() runs at launch (after the first deal, so the fetch never holds
+up the mixer) and again on the button. A demo record — one carrying a licence
+credit; the owner's own files never have one — is PATCHED in place when its
+stored blob is the same byte count as the manifest's range (grid, cues, loop,
+credit; no download), and REMOVED when the manifest no longer lists it or its
+slice differs. If anything changed and no deck is playing, the round is
+re-dealt. A whole-file manifest entry has no range to compare, so its record is
+kept. tools/harness/tests/demo_sync.html seeds the stale state against the
+shipped crate.json and fails on the old code.
+Any future change to a track's byte range MUST change its stored size, or the
+sync will patch new grid numbers onto old audio. tools/mp3_window.py cuts on
+frame boundaries, so a moved range essentially always does.
+
+## New pair deals the least-recently-heard tracks (2026-10-15)
+Picking a random PAIR repeated itself: 36% of new rounds on the practice beats
+reused a track from the round before (16% on beats + demo), and tracks in a
+dense BPM cluster belong to more pairs, so they came round far more often.
+dealFresh() takes as deck 1 the track dealt longest ago that has a partner, and
+as deck 2 its partner dealt longest ago, ties at random. demo_sync.html checks
+39 deals: 0 reused from the round before, every track dealt, 7-8 plays each.
+The rotation is per session (not persisted).
+
 ## Thresholds must come from the material (2026-10-09)
 latency.html detected onsets above a fixed 0.15, which sat exactly on the
 quieter synthetic tracks' first kick: sometimes it was missed and the SECOND

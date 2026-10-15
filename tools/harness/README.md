@@ -36,6 +36,8 @@ python3 tools/harness/browser_test.py . tools/harness/tests/ride.html   --mount=
 python3 tools/harness/browser_test.py . tools/harness/tests/aids.html   --mount=/crate=/tmp/bmt-crate
 python3 tools/harness/browser_test.py . tools/harness/tests/stats.html
 python3 tools/harness/browser_test.py . tools/harness/tests/demo.html   --mount=/crate=/tmp/bmt-crate --mount=/demo=<dir with a test crate.json>
+# stale demo records on a phone are patched/pruned to the shipped crate.json; New pair rotates tracks
+python3 tools/harness/browser_test.py . tools/harness/tests/demo_sync.html
 
 # offline reload + persistence, and screenshots (need Playwright: npm i playwright)
 node tools/harness/pw_offline.mjs /tmp/bmt-crate

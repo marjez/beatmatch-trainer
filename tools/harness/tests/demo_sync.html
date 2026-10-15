@@ -1,0 +1,112 @@
+<!doctype html><meta charset=utf-8><title>demo sync + fresh dealing</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f></iframe>
+<script type=module>
+// "The tracks are not refreshing" — two causes, both checked here.
+//
+// 1. A phone that loaded the demo crate before v30 kept every old record:
+//    loadDemoCrate skipped any name it already had, so tracks cut from the
+//    manifest stayed forever and the kept ones never got their loop points.
+//    This seeds IndexedDB with exactly that state, using the SHIPPED
+//    demo/crate.json, and boots the app on it. Nothing is downloaded: a record
+//    whose stored slice is the same size as the manifest's range is patched in
+//    place (same id — the audio is kept); one the manifest no longer lists, or
+//    whose slice differs, is removed. The owner's own tracks carry no credit and
+//    must come through untouched, even one sharing a cut demo track's name.
+//
+// 2. New pair picked a random PAIR: 36% of rounds on the practice beats reused
+//    a track from the round before. Now every track is dealt before any returns.
+import { post, sleep, bootApp, waitFor } from './lib.js';
+import * as db from '/js/db.js';
+const R = { failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+const credit = { artist: 'x', title: 'x', license: 'CC BY 4.0', licenseUrl: 'x', page: 'x' };
+const bytes = n => new Blob([new Uint8Array(n)], { type: 'audio/mpeg' });
+try {
+  const manifest = await (await fetch('/demo/crate.json', { cache: 'no-store' })).json();
+  const M = manifest.tracks.map(t => ({ ...t, name: t.file.replace(/\.[^.]+$/, '') }));
+  const keep = M.slice(0, 3);
+  // A stale record of a track still shipped: right slice, pre-v30 fields.
+  const ids = {};
+  for (const t of keep) {
+    ids[t.name] = await db.addTrack({ name: t.name, bpm: t.bpm, bpmSource: 'name', blob: bytes(t.byteEnd - t.byteStart),
+                                      anchor: 0.5, cues: [99], credit });
+  }
+  // Shipped name, but a WHOLE-FILE download from before ranges existed.
+  const wrongSlice = M[3];
+  await db.addTrack({ name: wrongSlice.name, bpm: wrongSlice.bpm, bpmSource: 'name',
+                      blob: bytes(wrongSlice.byteEnd - wrongSlice.byteStart + 4096), anchor: 0, cues: [], credit });
+  // Two tracks that were cut from the crate for being bad to match against.
+  const cut = ['Mthaza - Sparkling Winter 119bpm', 'Raymundo Mendoza - Toodaze 120bpm'];
+  for (const n of cut) await db.addTrack({ name: n, bpm: 120, bpmSource: 'name', blob: bytes(1000), anchor: 0, cues: [], credit });
+  // The owner's own files: no credit. One even shares a cut demo track's name.
+  const own = ['My Own Tune 124bpm', cut[0]];
+  for (const n of own) await db.addTrack({ name: n, bpm: 124, bpmSource: 'name', blob: bytes(2000), anchor: null, cues: null });
+
+  // Watch the toast from the moment the frame exists: the sync can finish
+  // before bootApp returns, and dealing a round on the seeded silent blobs
+  // fails to decode and toasts over the top of it.
+  const toasts = [];
+  const watch = setInterval(() => {
+    const t = document.getElementById('f').contentDocument?.getElementById('toast')?.textContent;
+    if (t && toasts[toasts.length - 1] !== t) toasts.push(t);
+  }, 5);
+  document.getElementById('f').src = '/index.html';
+  const app = await bootApp();
+  const { bmt, g } = app;
+  try { await waitFor(() => bmt.tracks.length === 5, 15000, 'sync'); }
+  catch (e) { R.debug = { tracks: bmt.tracks.map(t => t.name), toasts }; throw e; }
+  await sleep(300);
+  clearInterval(watch);
+  const all = bmt.tracks;
+  R.after = all.map(t => ({ name: t.name, credit: !!t.credit, loop: [t.loopStart, t.loopEnd] }));
+  R.toast = toasts.find(t => /Demo crate updated/.test(t)) || toasts.join(' | ');
+
+  for (const t of keep) {
+    const rec = all.find(x => x.name === t.name && x.credit);
+    if (!rec) { fail('a still-shipped demo track was removed', t.name); continue; }
+    if (rec.id !== ids[t.name]) fail('a still-shipped track was re-added instead of patched', t.name);
+    if (rec.loopStart !== t.loopStart || rec.loopEnd !== t.loopEnd) fail('loop points not applied', { name: t.name, got: [rec.loopStart, rec.loopEnd] });
+    if (rec.anchor !== t.anchor || JSON.stringify(rec.cues) !== JSON.stringify(t.cues)) fail('grid not refreshed', t.name);
+  }
+  if (all.some(x => x.name === wrongSlice.name && x.credit)) fail('a record whose slice differs from the manifest was kept');
+  if (all.some(x => x.name === cut[1])) fail('a cut demo track survived', cut[1]);
+  if (all.some(x => x.name === cut[0] && x.credit)) fail('a cut demo track survived', cut[0]);
+  for (const n of own) if (!all.some(x => x.name === n && !x.credit)) fail("the owner's own track was touched", n);
+  if (!/3 refreshed, 3 removed/.test(R.toast)) fail('toast', R.toast);
+  // And it sticks: what the app shows is what is stored.
+  const stored = await db.getAllTracks();
+  if (stored.length !== all.length) fail('memory and IndexedDB disagree', { stored: stored.length, shown: all.length });
+
+  // ---- 2. dealing ----
+  for (const t of [...all]) await db.deleteTrack(t.id);
+  document.getElementById('f').contentWindow.location.reload();
+  await sleep(500);
+  const app2 = await bootApp();
+  app2.g('beatsBtn').click();
+  await waitFor(() => app2.bmt.tracks.length >= 11 && app2.bmt.round, 30000, 'practice beats');
+  const deals = [];
+  for (let i = 0; i < 40; i++) {
+    const r = app2.bmt.round;
+    deals.push([r.aId, r.bId]);
+    app2.g('newPairBtn').click();
+    await sleep(30);
+  }
+  let shared = 0;
+  for (let i = 1; i < deals.length; i++) if (deals[i].some(id => deals[i - 1].includes(id))) shared++;
+  const counts = new Map();
+  for (const d of deals.slice(1)) for (const id of d) counts.set(id, (counts.get(id) || 0) + 1);
+  const c = [...counts.values()];
+  R.dealing = { rounds: deals.length - 1, reusedFromPrevious: shared, tracksDealt: counts.size,
+                eligible: app2.bmt.tracks.length, minPlays: Math.min(...c), maxPlays: Math.max(...c) };
+  // Uniform pair picking scored ~14 of 39 here. Allow a couple for tracks at the
+  // edge of the tempo range, which have only one or two partners.
+  if (shared > 3) fail('new pair keeps reusing a track from the round before', R.dealing);
+  if (counts.size < app2.bmt.tracks.length) fail('some tracks never came round in 39 deals', R.dealing);
+  if (R.dealing.maxPlays - R.dealing.minPlays > 4) fail('tracks are dealt unevenly', R.dealing);
+
+  R.jsErrors = [...app.errs, ...app2.errs].filter(e => !/decode|Unable to decode|EncodingError/i.test(e));
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>

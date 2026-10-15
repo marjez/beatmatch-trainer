@@ -118,7 +118,18 @@ export async function tapMaster(app) {
     // a 150 ms refractory period. The synthetic kick is 0.9 peak at 55 Hz; the
     // drone under it sits at 0.04 and the hat at <= 0.25; after deck gain, the
     // 0.5 bus the kick lands at ~0.27, the hat at ~0.1.
-    onsets(t0, t1, thr = 0.15) {
+    // With no threshold given it is taken from the window's own peak (40%, as
+    // latency.html does). The old fixed 0.15 sat on the quieter synthetic
+    // tracks' kicks: ride.html missed every other one on the 88 BPM hip-hop
+    // pair and reported the beat period doubled — a failure that followed
+    // whichever pair was dealt, not the code. See CLAUDE.md, "Thresholds must
+    // come from the material".
+    onsets(t0, t1, thr = null) {
+      if (thr === null) {
+        let peak = 0;
+        for (const [, v] of samples(t0, t1)) { const a = Math.abs(v); if (a > peak) peak = a; }
+        thr = Math.max(0.04, peak * 0.4);
+      }
       const out = [];
       let env = 0, armed = true, lastOn = -1;
       const k = Math.exp(-1 / (0.004 * sr));
