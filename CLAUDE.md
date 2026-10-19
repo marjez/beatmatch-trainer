@@ -417,8 +417,9 @@ number was 80%.
   :8080. It used to be a background process owned by the Claude session, so it
   died when the session ended and the owner's next visit to the link just
   failed — "it's not working". Redeploy = re-export into that directory; the
-  unit needs no restart. http://100.110.176.56:8080/ over Tailscale,
-  http://192.168.1.81:8080/ on the LAN.
+  unit needs no restart. http://100.110.176.56:8080/ over Tailscale ONLY: it
+  binds the Tailscale IP, not 0.0.0.0, which exposed the app to the whole home
+  LAN (security audit, changed 2026-10-18). Don't bind it wider again.
 - MAC-ONLY, and can't move: the crate itself lives in iCloud Drive and
   rekordbox.xml is exported there, so crate_sync.py / rekordbox_export.py only
   make sense on the Mac. They also shell out to afconvert, which is macOS-only —
