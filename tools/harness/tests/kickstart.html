@@ -1,0 +1,84 @@
+<!doctype html><meta charset=utf-8><title>kickstart</title>
+<style>html,body{margin:0;background:#14161a}iframe{width:390px;height:844px;border:0;display:block}</style>
+<iframe id=f src="/index.html"></iframe>
+<script type=module>
+// Does a deck's FIRST SOUND land on a kick, for tracks with no beat grid?
+// Reported as "the track is not starting on a 'one' kick" on the owner's own
+// tracks: a file added from the library has no Rekordbox anchor unless a
+// crate.json came with it, and the app then started it 30 s in — wherever
+// that happened to fall. Mount a folder of real tracks (any names, no grid,
+// no BPM in the filename) at /crate/ with a files.json; this adds them the
+// way the phone does, lets the app detect BPM, plays each one and requires
+// a kick within KICK_MS of the start and a beat that keeps running.
+//   ?material=top checks the "from the top" start the same way.
+import { post, sleep, bootApp, waitReady, tapMaster, pev, waitFor } from './lib.js';
+const R = { tracks: [], failures: [] };
+const fail = (m, x) => R.failures.push(x ? `${m} ${JSON.stringify(x)}` : m);
+const KICK_MS = 40, SPAN = 8;
+try {
+  const app = await bootApp();
+  // Added the way a phone adds a file it knows nothing about: no grid file, and
+  // no BPM in the name (a synthetic crate's names carry one, so strip it).
+  const { w, g, bmt } = app;
+  const files = await (await fetch('/crate/files.json')).json();
+  const truth = await fetch('/crate/truth.json').then(r => r.ok ? r.json() : null).catch(() => null);
+  const bare = n => n.replace(/\s*\d{2,3}(\.\d+)?\s*bpm/i, '');
+  const dt = new w.DataTransfer();
+  for (const n of files) dt.items.add(new w.File([await (await fetch('/crate/' + encodeURIComponent(n))).arrayBuffer()], bare(n), { type: 'audio/mpeg' }));
+  g('fileInput').files = dt.files; g('fileInput').dispatchEvent(new w.Event('change', { bubbles: true }));
+  await waitFor(() => bmt.tracks.length >= files.length, 60000, 'tracks to load');
+  const names = files;
+  const truthOf = name => truth && (truth.tracks || truth).find(t => bare(t.file).replace(/\.[a-z0-9]+$/i, '') === name);
+  g('detectBtn').click();
+  await waitFor(() => bmt.tracks.length === names.length && bmt.tracks.every(t => t.bpm || t.bpmSource === null), 900000, 'BPM detection');
+  await sleep(300);
+  const material = new URLSearchParams(location.search).get('material');
+  if (material === 'top') g('materialSeg').querySelector('[data-material="top"]').click();
+  g('sheetClose').click();
+  await waitFor(() => bmt.round, 20000, 'a round'); await waitReady(app);
+  pev(w, g('playA'), 'pointerdown'); await sleep(50); pev(w, g('playA'), 'pointerdown'); await sleep(100);
+  const rec = await tapMaster(app);
+  for (const tr of bmt.tracks) {
+    if (!tr.bpm) { R.tracks.push({ track: tr.name, skipped: 'no BPM detected' }); continue; }
+    await bmt.loadDeck('A', tr);
+    await waitFor(() => bmt.decks.A.ready, 60000, 'deck A');
+    rec.clear(); await sleep(80);
+    pev(w, g('playA'), 'pointerdown');
+    const sched = bmt.decks.A.mark;
+    await sleep(SPAN * 1000 + 300); await rec.settle(sched + SPAN);
+    const period = 60 / tr.bpm / bmt.rateFor('A');
+    const s = rec.gridScore(sched, sched + SPAN, period);
+    const tru = truthOf(tr.name);
+    if (tru && Math.abs(tr.bpm - tru.bpm) > 0.05) fail('measured tempo is off', { track: tr.name, bpm: tr.bpm, truth: tru.bpm });
+    // Is the FIRST SOUND a kick? Kick-band level in the opening 60 ms against
+    // this track's own typical beat (the median of the level at each beat
+    // over the eight seconds) — and when it peaks. gridScore's firstMs is no
+    // use here: it reports the loudest kick of the first bar, not the first.
+    const env = rec.lowEnvelope(sched, sched + SPAN), hop = env.hopS;
+    const peakNear = (t, w) => { let p = 0, at = 0; for (let i = Math.max(0, Math.round((t - w) / hop)); i <= Math.min(env.length - 1, Math.round((t + w) / hop)); i++) if (env[i] > p) { p = env[i]; at = i; } return { p, at: at * hop }; };
+    // A kick's sub blooms 20-40 ms after its attack, and the deck is cued to
+    // the ATTACK, so each beat is read in the 60 ms that follow it.
+    const beatPeaks = []; for (let k = 1; k * period < SPAN - 0.1; k++) beatPeaks.push(peakNear(k * period + 0.03, 0.03).p);
+    const perBeat = [...beatPeaks].sort((a, b) => a - b);
+    const typical = perBeat[perBeat.length >> 1] || 0;
+    const open = peakNear(0.03, 0.03);
+    // Does the beat keep running? Counted the same way: beats that carry at
+    // least half a typical kick. (gridScore compares each beat with the
+    // half-beat after it, which reads a tech-house track with a loud off-beat
+    // bass as having no beat at all — measured on four real tracks whose
+    // kicks were exactly on the grid.)
+    const kept = beatPeaks.filter(p => p >= typical * 0.5).length;
+    const one = { track: tr.name, bpm: tr.bpm, bpmTruth: tru ? tru.bpm : null, startS: bmt.decks.A.startS ?? null, how: bmt.decks.A.startHow ?? null,
+                  openingKick: typical ? +(open.p / typical).toFixed(2) : null, firstKickMs: +(open.at * 1000).toFixed(1),
+                  beats: beatPeaks.length, beatsWithKick: kept, onOffRatio: s.ratio };
+    R.tracks.push(one);
+    if (!(one.openingKick >= 0.5)) fail('no kick at the start', one);
+    else if (kept < beatPeaks.length * 0.8) fail('the beat does not keep running from the start', one);
+    pev(w, g('playA'), 'pointerdown'); await sleep(120);
+  }
+  R.jsErrors = app.errs;
+  R.verdict = R.failures.length ? 'FAIL' : 'PASS';
+  rec.disconnect();
+  await post(R);
+} catch (e) { await post({ fatal: String(e && e.stack || e), R }); }
+</script>

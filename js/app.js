@@ -2,7 +2,7 @@
 // Two decks at their own tempos (or a hidden offset on deck B), ±8% pitch
 // fader, hold-to-nudge, score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v34';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v35';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -247,9 +247,13 @@ async function decodeForAnalysis(trackId) {
   // which is the two-full-buffers case that kills the tab on iOS.
   let release;
   const gate = new Promise(r => { release = r; });
-  const mine = loadChain.then(() => gate);
-  loadChain = mine;
-  await loadChain.catch(() => {});
+  // Wait for what was ALREADY queued, then hold the chain until this decode is
+  // done. This used to await the new chain — its own gate, which only the
+  // finally below releases — so Detect BPM hung forever and no track ever got
+  // an auto-detected tempo.
+  const before = loadChain;
+  loadChain = before.then(() => gate, () => gate);
+  await before.catch(() => {});
   try {
     const arr = await t.blob.arrayBuffer();
     return await ctx.decodeAudioData(arr);
@@ -331,12 +335,14 @@ fileInput.addEventListener('change', async (e) => {
   else if (gridApplied) toast(`Beat grid applied to ${gridApplied} track${gridApplied > 1 ? 's' : ''}.`);
   else if (ignored.length) toast(`Nothing added — those files aren't audio or crate.json.`);
   renderLibrary();
-  // NO detectMissingBPMs() here. It full-decodes a track (~200 MB) and does not
-  // go through loadChain, so on an import it ran alongside the round's own
-  // decode — two full buffers at once, which is what gets the tab killed on
-  // iOS. Detection is the button in the crate panel; it always was meant to be.
   updateButtons();
   if (!round && canStart()) startRound();
+  // Tracks that arrived without a tempo get one measured, in the background.
+  // This was once left to the Detect button because a detection decode ran
+  // ALONGSIDE the round's own (two ~200 MB buffers, which kills the tab on
+  // iOS). Detection is queued through loadChain now, one track at a time, so a
+  // deck load slots in between two of them and they never overlap.
+  if (tracks.some(t => !t.bpm && t.blob)) detectMissingBPMs();
 });
 
 // ---------- Demo crate ----------
@@ -582,7 +588,15 @@ async function detectMissingBPMs() {
     t.bpmSource = 'pending';
     try {
       let buf = await decodeForAnalysis(t.id);
-      const bpm = t.bpmSource === 'pending' ? await detectBPM(buf) : null;
+      let bpm = t.bpmSource === 'pending' ? await detectBPM(buf) : null;
+      // The detector answers in whole BPM, and the score is only as true as
+      // the tags: at 124.62 a rounded 125 marks a perfect match 0.3% out.
+      // Measure the real tempo from the kicks while the buffer is in hand.
+      if (bpm) {
+        const { measureTempo } = await import('./kickgrid.js?v=' + APP_BUILD);
+        const m = measureTempo(buf, bpm);
+        if (m) bpm = m.bpm;
+      }
       buf = null;                       // drop the ~200 MB buffer immediately
       if (t.bpmSource !== 'pending') continue;
       if (bpm) { t.bpm = bpm; t.bpmSource = 'auto'; await db.updateTrack(t); }
@@ -590,6 +604,9 @@ async function detectMissingBPMs() {
     } catch { t.bpmSource = null; }
     renderLibrary();
     updateButtons();
+    // The first two tempos that can be paired are a round: don't make the
+    // user come back and ask for one.
+    if (!round && canStart()) startRound();
   }
 }
 
@@ -876,7 +893,28 @@ function loadDeck(id, track) {
       // downbeat, intro and breakdowns included, played once.
       const top = material === 'top';
       const loop = top ? null : loopRegion(track, full.duration);
-      const startS = top ? topStart(track) : loop ? loop.from : phraseStart(track, full.duration);
+      // A declared loop was verified offline, by playing it. Everything else —
+      // the owner's own tracks above all — is cued by LISTENING to the decoded
+      // audio for where the kick actually is (js/kickgrid.js), because a
+      // calculated start point promises nothing about what is playing there.
+      let startS, how = 'loop';
+      if (loop) startS = loop.from;
+      else {
+        const planned = top ? topStart(track) : phraseStart(track, full.duration);
+        const { findKickStart } = await import('./kickgrid.js?v=' + APP_BUILD);
+        if (d.token !== token) return;
+        const gridded = typeof track.anchor === 'number' && track.bpm;
+        const phrase = BEATS_PER_PHRASE * (60 / (track.bpm || 128));
+        const found = findKickStart(full, track.bpm, {
+          // With a grid: the planned phrase, then the next few, if the beat runs there.
+          candidates: gridded ? [0, 1, 2, 3, 4, 5, 6, 7].map(n => planned + n * (top ? phrase / 4 : phrase)) : [],
+          snap: gridded ? { anchor: track.anchor, beatS: 60 / track.bpm } : null,
+          latest: Math.max(planned, full.duration - 90),
+        });
+        startS = found ? found.start : planned;
+        how = found ? found.how : 'no kick found';
+      }
+      d.startS = startS; d.startHow = how;
       const start = Math.floor(startS * c.sampleRate);
       // Reuse a pooled buffer. Allocating a fresh ~35 MB Float32Array per deck
       // per round, then dropping it along with the ~150 MB decoded original, is
@@ -1910,7 +1948,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v34';
+const APP_BUILD = 'bmt-v35';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -2034,6 +2072,9 @@ async function init() {
     const more = r.missing ? ` Tap Load the demo crate for ${r.missing} more.` : '';
     toast(`Demo crate updated: ${r.updated} refreshed, ${r.removed} removed.${more}`);
   }).catch(() => {});
+  // Tracks still without a tempo (added before detection worked) get one now,
+  // one at a time behind whatever the decks are loading.
+  if (tracks.some(t => !t.bpm && t.blob)) detectMissingBPMs();
   $('buildStamp').textContent = `build ${APP_BUILD}`;
   registerSW();
 }

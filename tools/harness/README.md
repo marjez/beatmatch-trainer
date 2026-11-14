@@ -38,6 +38,9 @@ python3 tools/harness/browser_test.py . tools/harness/tests/stats.html
 python3 tools/harness/browser_test.py . tools/harness/tests/demo.html   --mount=/crate=/tmp/bmt-crate --mount=/demo=<dir with a test crate.json>
 # stale demo records on a phone are patched/pruned to the shipped crate.json; New pair rotates tracks
 python3 tools/harness/browser_test.py . tools/harness/tests/demo_sync.html
+# first sound is a kick + measured tempo, for tracks with no grid and no BPM in the name
+# (a folder of real tracks with a files.json works too; truth.json is used if present)
+python3 tools/harness/browser_test.py . tools/harness/tests/kickstart.html --mount=/crate=/tmp/bmt-crate
 
 # offline reload + persistence, and screenshots (need Playwright: npm i playwright)
 node tools/harness/pw_offline.mjs /tmp/bmt-crate

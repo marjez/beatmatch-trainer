@@ -1,6 +1,6 @@
 // sw.js — offline support. App shell is precached; fonts cached on first use.
 // Audio never touches the network: it lives in IndexedDB.
-const CACHE = 'bmt-v34';
+const CACHE = 'bmt-v35';
 
 self.addEventListener('message', e => {
   if (e.data === 'skipWaiting') self.skipWaiting();
@@ -15,6 +15,7 @@ const SHELL = [
   './js/app.js',
   './js/db.js',
   './js/beats.js',
+  './js/kickgrid.js',
   './js/vendor/web-audio-beat-detector.mjs',
   './manifest.webmanifest',
   './demo/crate.json',
@@ -29,7 +30,7 @@ const SHELL = [
 // deploy could precache the PREVIOUS build's JS with zero server hits, and
 // the offline app then ran new HTML against old JS. `cache: 'reload'` bypasses
 // the HTTP cache; the versioned urls keep the two in step.
-const VERSIONED = ['./css/app.css', './js/app.js', './js/db.js', './js/beats.js'];
+const VERSIONED = ['./css/app.css', './js/app.js', './js/db.js', './js/beats.js', './js/kickgrid.js'];
 const precacheList = () => [
   ...SHELL,
   ...VERSIONED.map(u => `${u}?v=${V}`),

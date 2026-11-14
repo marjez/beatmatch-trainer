@@ -39,6 +39,44 @@ down this file disagrees with this one, this one wins.
   v34 have no pct and fall back to |err|.
 Full notes on their app are in the session memory file beatmatch-pro-mechanics.
 
+## Tempo and start point are MEASURED from the audio (v35, 2026-11-14)
+Reported as "the track is not starting on a 'one' kick", on the owner's own
+tracks, first sound not a kick. Three things were wrong:
+- A track added without crate.json has no grid, and started "30 s in" wherever
+  that fell. Even with a Rekordbox anchor a phrase boundary says nothing about
+  what is playing there.
+- DETECT BPM HUNG FOREVER. decodeForAnalysis awaited the chain it had just
+  appended its own gate to, and only its own finally released the gate. No
+  track ever got an auto-detected tempo; nothing tested the button.
+- The detector's answer was stored as a WHOLE number (res.bpm, which the
+  library rounds), and since v34 the score is only as true as the tags.
+js/kickgrid.js fixes all three from the decoded buffer loadDeck / detection
+already hold:
+- findKickStart cues to the KICK-IN: the first kick from which the beat runs
+  eight bars (≥26 of 32 beats, first four all present). Beatmatch PRO cues to
+  the first detected beat too. With a grid, the planned phrase (and the next
+  seven) is taken as-is if the beat really runs from it, and a found kick-in
+  is snapped onto the grid when within 35 ms. Tracks with a declared loop are
+  untouched — those were verified offline by playing them.
+- measureTempo fits kick time against beat number over the longest run: exact
+  to 0.01 BPM on all six synthetic tracks with known decimal tempos. It tries
+  the ratios a tempo folds by (the detector said 83 for 124.62) and keeps the
+  one where nearly every beat has a kick and nearly every kick is a beat.
+- Detection runs automatically after an import and at launch, one track at a
+  time through loadChain, and deals a round as soon as two tempos pair.
+- The onset threshold is a third of the track's own typical kick. No constants
+  tuned to material.
+tools/harness/tests/kickstart.html adds tracks the way a phone does — no grid,
+no BPM in the name — and requires a kick in the first 60 ms and the beat to
+keep running; ?material=top checks that start too. On 15 tracks from the
+owner's house folder: 15/15. gridScore must NOT be used for this: it compares
+each beat with the half-beat after it and called four tech-house tracks with a
+loud off-beat bass beatless when their kicks were exactly on the grid; and its
+firstMs is the loudest kick of the first bar, not the first.
+NOT solved: which kick is bar ONE. The kick-in is nearly always a one, but
+nothing here can tell beat 1 from beat 3. Unverified tempos from that run:
+129.25, 130.04, 124.2 (the rest were whole numbers).
+
 ## Owner context
 - DJ setup: 2× Technics SL-1210 MK2, Allen & Heath Xone:PX5, Rekordbox library.
 - The ±8% pitch fader range and pitch-changes-key behaviour are deliberate:
