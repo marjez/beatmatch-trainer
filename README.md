@@ -6,8 +6,10 @@ Beatmatch PRO built around your own crate.
 
 ## How it works
 
-- Both decks are live, with a hidden random tempo offset on deck 2. Match them by
-  ear using the ±8% pitch faders (SL-1210 range) and hold-to-nudge buttons.
+- Both decks are live and each plays at its own tempo: close the gap by ear with
+  the ±8% pitch faders (SL-1210 range) and hold-to-nudge buttons, as in
+  Beatmatch PRO. The reveal gives Beatmatch PRO's score and stars plus the exact
+  BPM you were out. Hidden-offset rounds (wide or fine) are an option in the sheet.
 - Decks are started one at a time with **Play** and **Cue**, as on CDJs or 1210s:
   press to sound is 0.11 ms in the harness, and playback begins on a downbeat, so
   you drop the second deck on the first one's beat by ear. **Drop both** — which

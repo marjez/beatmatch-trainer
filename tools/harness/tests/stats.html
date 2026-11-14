@@ -21,20 +21,23 @@ try {
   await new Promise(res => { const q = w.indexedDB.open('beatmatch-trainer'); q.onsuccess = () => { const db = q.result, tx = db.transaction('rounds', 'readwrite'); for (const r of seeded) tx.objectStore('rounds').add(r); tx.oncomplete = () => { db.close(); res(); }; }; });
   g('menuBtn').click();
   await waitFor(() => g('statsPanel').style.display === 'block' && g('statsChart').querySelector('svg'), 5000, 'stats panel');
-  const abs = seeded.map(r => Math.abs(r.errBpm));
+  // Charted on the score: percent tempo difference. These seeded rounds are
+  // pre-v34 shaped (no pct field), so the panel must fall back to |err|.
+  const abs = seeded.map(r => Math.abs(r.err));
+  const starsOf = p => 5 - Math.min(5, Math.round(p));
   const med = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
   R.kpi = { rounds: g('kpiRounds').textContent, best: g('kpiBest').textContent, median: g('kpiMedian').textContent, locked: g('kpiLocked').textContent };
   if (R.kpi.rounds !== '25') fail('rounds kpi', R.kpi);
   if (R.kpi.best !== Math.min(...abs).toFixed(2)) fail('best kpi', R.kpi);
   if (R.kpi.median !== med(abs.slice(-20)).toFixed(2)) fail('median kpi', R.kpi);
-  if (R.kpi.locked !== Math.round(100 * abs.filter(a => a <= 0.05).length / 25) + '%') fail('locked kpi', R.kpi);
+  if (R.kpi.locked !== Math.round(100 * abs.filter(a => starsOf(a) === 5).length / 25) + '%') fail('five-star kpi', R.kpi);
   const svg = g('statsChart').querySelector('svg');
   R.dots = svg.querySelectorAll('.dot').length;
   if (R.dots !== 25) fail('dot count', R.dots);
   // Dots are in x order and the y of the last dot matches its band colour.
   const dots = [...svg.querySelectorAll('.dot')];
   const last = dots[24], aLast = abs[24];
-  const band = aLast <= 0.05 ? 'good' : aLast <= 0.3 ? 'mid' : 'bad';
+  const band = starsOf(aLast) === 5 ? 'good' : starsOf(aLast) >= 3 ? 'mid' : 'bad';
   if (!last.classList.contains(band) && !last.classList.contains('capped')) fail('band colour', { cls: last.className.baseVal, aLast });
   const xs = dots.map(d => +d.getAttribute('cx'));
   if (!xs.every((x, i) => i === 0 || x > xs[i - 1])) fail('dots not in order');
@@ -42,7 +45,7 @@ try {
   svg.querySelectorAll('.hit')[24].dispatchEvent(new w.PointerEvent('pointerdown', { bubbles: true }));
   await sleep(30);
   R.tip = g('statsTip').textContent;
-  if (g('statsTip').hidden || !R.tip.includes('A24') || !R.tip.includes(aLast.toFixed(2))) fail('tooltip', R.tip);
+  if (g('statsTip').hidden || !R.tip.includes('A24') || !R.tip.includes(aLast.toFixed(3)) || !R.tip.includes('★')) fail('tooltip', R.tip);
   // Filter: fine offset only.
   g('statsSeg').querySelector('[data-stats="hard"]').click(); await sleep(150);
   const hardN = seeded.filter(r => r.difficulty === 'hard').length;

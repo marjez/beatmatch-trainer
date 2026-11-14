@@ -141,10 +141,8 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 
 /* ---- Two-channel mixer ---------------------------------------------------
    Symmetric channels, no metal texture: the plinth/platter palette carries the
-   whole thing. No level meters BY DEFAULT — bouncing meters let you see the
-   kicks line up and beatmatch by eye. They exist only behind the opt-in
-   "Visual aids" setting, which says as much; ears-only is the default and the
-   honest one. */
+   whole thing. Level meters are ON by default since v34 (the owner's call, to
+   match Beatmatch PRO) with a switch in the sheet; waveforms stay opt-in. */
 .decks {
   flex: 1; min-height: 0;
   display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px;
@@ -421,17 +419,17 @@ header { display: flex; align-items: center; gap: 10px; padding: 0 2px 2px; flex
 .reveal-detail { font-family: var(--font-mono); font-size: 12px; color: var(--alloy); margin-top: 16px; line-height: 1.7; }
 .reveal-detail span { color: var(--alloy-dim); }
 
-.strobe-band {
-  margin: 20px -22px; padding: 14px 0; overflow: hidden; position: relative;
-  border-top: 1px solid var(--edge); border-bottom: 1px solid var(--edge);
-  background: var(--plinth);
-}
-.strobe-row { display: flex; gap: 18px; width: 200%; }
-.strobe-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--strobe); flex-shrink: 0; box-shadow: 0 0 6px rgba(255,74,60,0.5); }
-.strobe-row.locked .strobe-dot { background: var(--lock); box-shadow: 0 0 8px rgba(63,214,143,0.6); }
-.strobe-caption { font-family: var(--font-mono); font-size: 10px; color: var(--alloy-dim); margin-top: 8px; }
-@keyframes strobeDrift { from { transform: translateX(0); } to { transform: translateX(-28px); } }
-@media (prefers-reduced-motion: reduce) { .strobe-row { animation: none !important; } }
+.reveal-stars { font-size: 26px; letter-spacing: 0.12em; margin-top: 12px; line-height: 1; }
+.reveal-stars.good { color: var(--lock); }
+.reveal-stars.mid { color: var(--amber); }
+.reveal-stars.bad { color: var(--strobe); }
+.reveal-name { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--alloy); margin-top: 8px; }
+.reveal-bpm { font-family: var(--font-mono); font-size: 13px; color: var(--alloy-dim); margin-top: 6px; }
+.reveal-decks { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; margin-top: 16px; }
+.reveal-deck { background: var(--plinth); border: 1px solid var(--edge); border-radius: 8px; padding: 10px 8px; font-family: var(--font-mono); font-size: 11px; color: var(--alloy-dim); line-height: 1.6; min-width: 0; }
+.reveal-deck-n { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--alloy); line-height: 1; }
+.reveal-deck-name { color: var(--alloy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 4px 0 2px; }
+.reveal-deck-you { color: var(--alloy); font-weight: 600; }
 
 .history-row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; padding: 6px 2px; border-bottom: 1px solid rgba(49,53,63,0.5); color: var(--alloy-dim); }
 .history-row b { color: var(--alloy); font-weight: 600; }

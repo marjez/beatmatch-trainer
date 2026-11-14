@@ -4,7 +4,7 @@
 <script type=module>
 // Riding the pitch while playing: 150 fader moves over 2 s must not open a
 // single gap in the output (the drone under the beat makes gaps measurable),
-// the beat period must follow the fader, nudge must bend by exactly 2% and
+// the beat period must follow the fader, nudge must bend by exactly the set amount and
 // snap back, stop/play must resume where it stopped, and ten rounds must
 // reuse the same pooled window buffers rather than allocate.
 import { post, sleep, bootApp, loadCrate, waitReady, tapMaster, pev, waitFor, stats } from './lib.js';
@@ -78,7 +78,18 @@ try {
   const expectN = 60 / track('A').bpm / rateHeld * 1000;
   R.nudge = { rateBefore: +rateBefore.toFixed(5), rateHeld: +rateHeld.toFixed(5), rateAfter: +rateAfter.toFixed(5),
               periodHeldMs: stats(perN), expectedHeldMs: +expectN.toFixed(2), readoutHeld: null };
-  if (Math.abs(rateHeld / rateBefore - 1.02) > 1e-9) fail('nudge is not +2%', R.nudge);
+  // 10% by default (Beatmatch PRO's bend), and whatever the setting says after.
+  R.nudge.pct = bmt.nudgePct;
+  if (bmt.nudgePct !== 10) fail('nudge default is not 10%', R.nudge);
+  if (g('nudgeUpA').textContent !== '+10%') fail('nudge button label', g('nudgeUpA').textContent);
+  if (Math.abs(rateHeld / rateBefore - 1.10) > 1e-9) fail('nudge is not +10%', R.nudge);
+  for (const pct of [2, 5, 10]) {
+    g('nudgeSeg').querySelector(`[data-nudge="${pct}"]`).click();
+    pev(w, g('nudgeDownA'), 'pointerdown');
+    const held = bmt.rateFor('A'), label = g('nudgeDownA').textContent;
+    pev(w, g('nudgeDownA'), 'pointerup');
+    if (Math.abs(held / rateBefore - (1 - pct / 100)) > 1e-9 || label !== `−${pct}%`) fail('nudge setting ' + pct, { held, label });
+  }
   if (rateAfter !== rateBefore) fail('nudge did not snap back', R.nudge);
   if (perN.length < 2) fail('not enough beats measured under nudge', R.nudge);
   else if (Math.abs(stats(perN).median - expectN) > 1.5) fail('beat period under nudge', R.nudge);   // same ±0.5 ms floor

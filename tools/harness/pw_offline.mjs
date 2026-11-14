@@ -66,6 +66,9 @@ try {
   page.on('requestfailed', r => failedRequests.push(r.url()));
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => window.__bmt, null, { timeout: 15000 }).catch(() => fail('app did not boot offline'));
+  // __bmt exists as soon as the module has evaluated; the crate is read from
+  // IndexedDB a few awaits into init(). Wait for it, as the cold launch does.
+  await page.waitForFunction(n => window.__bmt.tracks.length >= n, picked.length, { timeout: 10000 }).catch(() => {});
   const tracksOffline = await page.evaluate(() => window.__bmt.tracks.length).catch(() => -1);
   if (tracksOffline !== picked.length) fail(`crate after offline reload: ${tracksOffline} tracks, expected ${picked.length}`);
   await page.waitForFunction(() => window.__bmt.round && window.__bmt.decks.A.ready && window.__bmt.decks.B.ready, null, { timeout: 30000 }).catch(() => fail('decks not ready offline'));

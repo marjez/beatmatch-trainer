@@ -1,8 +1,8 @@
 // app.js — Beatmatch Trainer core.
-// Two decks, hidden tempo offset on deck B, ±8% pitch fader, hold-to-nudge,
-// score on reveal. Crate and stats persist via IndexedDB (db.js).
+// Two decks at their own tempos (or a hidden offset on deck B), ±8% pitch
+// fader, hold-to-nudge, score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v33';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v34';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -10,12 +10,18 @@ import * as db from './db.js?v=bmt-v33';   // versioned like index.html's script
 let tracks = [];            // {id, name, bpm, bpmSource, blob}
 let ctx = null;
 const mode = 'pair';        // always two different tracks; recorded on saved rounds
-let difficulty = 'easy';
-let round = null;           // {aIdx, bIdx, hidden, r0}
+// Round setup. 'natural' is Beatmatch PRO's: two tracks at their own tempos,
+// both faders at 0, bridge the real gap. 'easy'/'hard' pre-match the pair and
+// hide a wide or fine offset on deck 2 — the original mechanic, kept as options.
+let difficulty = 'natural';
+let round = null;           // {aId, bId, hidden, r0, bpmA, bpmB, ...}
+let material = 'loop';      // 'loop' a beat-solid section, or 'top': first 90 s, as Beatmatch PRO
+let nudgePct = 10;          // momentary bend while a nudge button is held
+let meters = true;          // level meters, on by default as in Beatmatch PRO
 let split = false;          // headphone split: A hard left, B hard right
 let beatFocus = false;      // low-pass the master so only the kicks remain
 let pitchRange = 8;         // fader range %, 8 (SL-1210) or 16 via ×2
-let aids = false;           // visual aids: meters, waveforms, %/★ on the reveal — never a BPM
+let aids = false;           // visual aids: scrolling waveforms with the beat grid — never a BPM
 // Both decks are fully live: each has its own pitch fader and nudge, the
 // the score is the tempo difference BETWEEN them. offset/mark track the playhead
 // so Cue can return to the start point and Play can resume where it stopped.
@@ -44,7 +50,9 @@ const fileInput = $('fileInput'), trackList = $('trackList'), libMeta = $('libMe
 const revealBtn = $('revealBtn'), newPairBtn = $('newPairBtn');
 const overlay = $('overlay');
 
+const toastLog = [];        // last few messages, for the harness: one toast can replace another within a frame
 function toast(msg, ms = 2800) {
+  toastLog.push(msg); if (toastLog.length > 20) toastLog.shift();
   const t = $('toast');
   t.textContent = msg;
   t.classList.add('show');
@@ -637,6 +645,15 @@ function phraseStart(track, duration) {
   return at < duration - 20 ? at : target;
 }
 
+// "From the top": the first downbeat in the file. The grid anchor is A
+// downbeat, so step back from it in whole bars.
+const TOP_S = 90;
+function topStart(track) {
+  if (typeof track?.anchor !== 'number' || !track?.bpm) return 0;
+  const bar = 4 * (60 / track.bpm);
+  return Math.max(0, track.anchor - Math.floor(track.anchor / bar + 1e-6) * bar);
+}
+
 // A track's beat-solid region, both ends on a phrase boundary. Analysed
 // offline (tools/harness/audit_window.html) and carried in the manifest;
 // anything shorter than 8 phrases is not worth looping.
@@ -651,6 +668,7 @@ function loopRegion(track, duration) {
   return { from, to };
 }
 
+const MIN_NATURAL_GAP = 0.5;   // percent
 function pickHidden() {
   const [lo, hi] = difficulty === 'easy' ? [2, 6] : [0.5, 2.5];
   const mag = lo + Math.random() * (hi - lo);
@@ -694,11 +712,17 @@ function startRound(keepPair = false) {
       toast(`No two tracks are within ±${pitchRange}% of each other — add closer BPMs, or tap ×2 to widen the range.`);
       return;
     }
-    [a, b] = dealFresh(pairs);
+    // With no hidden offset, two tracks at the same tempo are a round with
+    // nothing to do. Deal a real gap whenever the crate has one.
+    const gapped = difficulty === 'natural' ? pairs.filter(p => Math.abs(p[0].bpm / p[1].bpm - 1) * 100 >= MIN_NATURAL_GAP) : pairs;
+    [a, b] = dealFresh(gapped.length ? gapped : pairs);
   }
-  const r0 = a.bpm / b.bpm;
-  let hidden, needed;
-  do {
+  // Natural: each deck runs at its own tempo and the faders bridge the gap.
+  // Offset modes: r0 pre-matches deck 2 to deck 1, then a hidden offset is added.
+  const natural = difficulty === 'natural';
+  const r0 = natural ? 1 : a.bpm / b.bpm;
+  let hidden = 0, needed;
+  if (!natural) do {
     hidden = pickHidden();
     needed = (1 / (1 + hidden / 100) - 1) * 100;
   } while (Math.abs(needed) > pitchRange - 0.5);
@@ -706,7 +730,10 @@ function startRound(keepPair = false) {
   // were read at REVEAL, so switching Mode or ×2 mid-round relabelled the
   // record, and editing deck 1's BPM in the crate rescaled the score (set it
   // to 60 and a 0.10 BPM miss reports 0.047 — green).
-  round = { aId: a.id, bId: b.id, hidden, r0, difficulty, pitchRange, bpmA: a.bpm, aids };
+  // moved/played/t0 drive Beatmatch PRO's flow: Reveal lights once a fader has
+  // moved, and the clock runs from both decks having been played.
+  round = { aId: a.id, bId: b.id, hidden, r0, difficulty, pitchRange, bpmA: a.bpm, bpmB: b.bpm, aids, material,
+            moved: false, playedA: false, playedB: false, t0: null };
   for (const id of DECKS) {
     const d = decks[id];
     d.fader = 0; d.nudge = 0; d.rate = 1; d.cuePoint = 0; d.previewing = false;
@@ -727,19 +754,33 @@ function rateFor(id) {
 }
 // Score is the RELATIVE tempo error between the decks, so moving either fader
 // counts. Nudge is excluded: it is a momentary bend, not part of your answer.
+// The tempo each deck is actually running at: its tag (as dealt, not as since
+// edited in the crate) scaled by everything between the file and the speaker.
+function deckBpms(from) {
+  const at = from || { ...round, faderA: decks.A.fader, faderB: decks.B.fader };
+  return {
+    a: at.bpmA * (1 + at.faderA / 100),
+    b: at.bpmB * at.r0 * (1 + at.hidden / 100) * (1 + at.faderB / 100),
+  };
+}
 function currentErrorPct(from) {
-  const at = from || { hidden: round.hidden, faderA: decks.A.fader, faderB: decks.B.fader };
-  const a = 1 + at.faderA / 100;
-  const b = (1 + at.hidden / 100) * (1 + at.faderB / 100);
+  const { a, b } = deckBpms(from);
   return (b / a - 1) * 100;
 }
-// The BPM the pair is actually running at, which is what the error is measured
-// against — deck A's tag scaled by wherever its own fader is sitting.
-function effectiveBpmA(at) {
-  const tagged = at?.bpmA ?? round?.bpmA;   // as dealt, not as currently edited
-  const faderA = at?.faderA ?? decks.A.fader;
-  return tagged ? tagged * (1 + faderA / 100) : null;
+// Beatmatch PRO's score, read from its own client code (2026-11-14): the
+// difference between the two decks' BPMs as a percentage of their mean, and
+// one star lost per whole percent, rounded — so five stars is under 0.5%.
+// Theirs feeds it auto-detected BPMs rounded to integers; ours feeds it the
+// exact decimal tags, so a true match scores 0.000.
+const STAR_NAMES = ['amazing', 'fab', 'great', 'good', 'not bad', 'not even close'];
+function proScore(from) {
+  const { a, b } = deckBpms(from);
+  const pct = 100 * Math.abs(a - b) / ((a + b) / 2);
+  const lost = Math.min(5, Math.round(pct));
+  return { pct, stars: 5 - lost, name: STAR_NAMES[lost] };
 }
+const starBand = stars => stars === 5 ? 'good' : stars >= 3 ? 'mid' : 'bad';
+const starText = stars => '★'.repeat(stars) + '☆'.repeat(5 - stars);
 
 // ---------- Playback ----------
 // AudioBufferSourceNode, not a media element. playbackRate here is an AudioParam:
@@ -772,7 +813,7 @@ function ensureChain(id) {
     applySplit();
   }
   d.gain.gain.value = deckGain(id);
-  if (aids && !d.analyser) attachAnalyser(id);
+  if ((aids || meters) && !d.analyser) attachAnalyser(id);
   return d;
 }
 function applySplit() {
@@ -820,6 +861,7 @@ function loadDeck(id, track) {
         d.ready = true;
         updateTransport();
         if (aids) drawWave(id);
+        if (meters || aids) attachAnalyser(id);
         return;
       }
       const full = await ctx.decodeAudioData(await track.blob.arrayBuffer());
@@ -830,8 +872,11 @@ function loadDeck(id, track) {
       // 16 s or more. Matching against silence teaches nothing, so when a
       // track declares a loop (both ends on a phrase boundary, found by
       // tools/harness/audit_window.html) the deck plays that and repeats it.
-      const loop = loopRegion(track, full.duration);
-      const startS = loop ? loop.from : phraseStart(track, full.duration);
+      // 'top' is Beatmatch PRO's material: the first 90 seconds from the first
+      // downbeat, intro and breakdowns included, played once.
+      const top = material === 'top';
+      const loop = top ? null : loopRegion(track, full.duration);
+      const startS = top ? topStart(track) : loop ? loop.from : phraseStart(track, full.duration);
       const start = Math.floor(startS * c.sampleRate);
       // Reuse a pooled buffer. Allocating a fresh ~35 MB Float32Array per deck
       // per round, then dropping it along with the ~150 MB decoded original, is
@@ -848,7 +893,7 @@ function loadDeck(id, track) {
       // tempo and let the samples, not the JSON, decide.
       const wanted = loop
         ? Math.round(Math.round((loop.to - loop.from) / (60 / track.bpm)) * (60 / track.bpm) * c.sampleRate)
-        : win.length;
+        : top ? Math.floor(TOP_S * c.sampleRate) : win.length;
       const avail = Math.max(1, Math.min(win.length, wanted, full.length - start));
       for (let i = 0; i < avail; i++) out[i] = (L[start + i] + R[start + i]) * 0.5;
       if (avail < win.length) out.fill(0, avail);       // silence the unused tail
@@ -859,6 +904,7 @@ function loadDeck(id, track) {
       d.ready = true;
       updateTransport();
       if (aids) drawWave(id);
+      if (meters || aids) attachAnalyser(id);
     } catch {
       d.ready = false;
       toast(`Deck ${id === 'A' ? 1 : 2}: could not read this track.`);
@@ -988,7 +1034,7 @@ function dropBoth() {
   const c = ensureCtx();
   if (!decks.A.ready || !decks.B.ready) { toast('Still loading the pair…'); return; }
   const when = c.currentTime + 0.12;      // a beat of lead-in so both get scheduled
-  for (const id of DECKS) startSource(id, 0, when);
+  for (const id of DECKS) { startSource(id, 0, when); notePlayed(id); }
   updateTransport();
 }
 
@@ -997,7 +1043,15 @@ function playDeck(id) {
   const d = decks[id];
   if (!d.ready) { toast(`Deck ${id === 'A' ? 1 : 2} still loading…`); return; }
   startSource(id, d.offset);
+  notePlayed(id);
   updateTransport();
+}
+// The round clock starts when both decks have been heard, as in Beatmatch PRO
+// (a cue preview counts there too), and stops at Reveal.
+function notePlayed(id) {
+  if (!round) return;
+  round['played' + id] = true;
+  if (round.playedA && round.playedB && round.t0 === null) round.t0 = performance.now();
 }
 function stopDeck(id) {
   stopSource(id);
@@ -1020,6 +1074,7 @@ function cuePress(id) {
   }
   d.previewing = true;
   startSource(id, 0);
+  notePlayed(id);
   updateTransport();
 }
 function cueRelease(id) {
@@ -1031,11 +1086,17 @@ function cueRelease(id) {
   updateTransport();
 }
 
+// Reveal lights once you have moved a pitch fader, as in Beatmatch PRO: until
+// then there is no answer to mark, and a mis-tap would write a junk round into
+// a history that cannot be edited.
+function revealReady() {
+  return !!round && decks.A.ready && decks.B.ready && round.moved;
+}
 function updateTransport() {
   kickAids();
   // Reveal is gated on both decks being ready, and readiness changes here —
   // without this the button stayed disabled for the whole round.
-  if (revealBtn) revealBtn.disabled = !round || !decks.A.ready || !decks.B.ready;
+  if (revealBtn) revealBtn.disabled = !revealReady();
   for (const id of DECKS) {
     const d = decks[id];
     const btn = $('play' + id);
@@ -1169,26 +1230,33 @@ function drawMeters() {
 }
 function aidsFrame() {
   aidsRaf = null;
-  if (!aids) return;
-  drawMeters();
-  for (const id of DECKS) drawWave(id);
+  if (!aids && !meters) return;
+  if (meters) drawMeters();
+  if (aids) for (const id of DECKS) drawWave(id);
   if (DECKS.some(id => decks[id].playing) || DECKS.some(id => meterLevel[id] > 0.001)) aidsRaf = requestAnimationFrame(aidsFrame);
 }
 function kickAids() {
-  if (!aids || aidsRaf !== null) return;
+  if ((!aids && !meters) || aidsRaf !== null) return;
   aidsRaf = requestAnimationFrame(aidsFrame);
 }
-function setAids(on) {
-  aids = on;
-  [...$('aidsSeg').children].forEach(b => b.classList.toggle('on', (b.dataset.aids === 'on') === on));
+// Meters and waveforms are separate switches sharing one analyser per deck and
+// one animation loop. With BOTH off there is no analyser in the graph and no
+// loop running — off still means off.
+function syncAids() {
+  const need = aids || meters;
+  [...$('aidsSeg').children].forEach(b => b.classList.toggle('on', (b.dataset.aids === 'on') === aids));
+  [...$('metersSeg').children].forEach(b => b.classList.toggle('on', (b.dataset.meters === 'on') === meters));
   for (const id of DECKS) {
-    $('wave' + id).hidden = !on;
-    $('meter' + id).hidden = !on;
-    if (on) { if (decks[id].gain) attachAnalyser(id); } else detachAnalyser(id);
+    $('wave' + id).hidden = !aids;
+    $('meter' + id).hidden = !meters;
+    if (need) { if (decks[id].gain) attachAnalyser(id); } else detachAnalyser(id);
   }
-  if (on) { measureFaders(); renderAllFaders(); kickAids(); }
-  else { if (aidsRaf !== null) { cancelAnimationFrame(aidsRaf); aidsRaf = null; } measureFaders(); renderAllFaders(); }
+  if (!need && aidsRaf !== null) { cancelAnimationFrame(aidsRaf); aidsRaf = null; }
+  measureFaders(); renderAllFaders();
+  if (need) kickAids();
 }
+function setAids(on) { aids = on; syncAids(); }
+function setMeters(on) { meters = on; syncAids(); }
 // ---------- Fader ----------
 // ±8% is the SL-1210 range and stays the default. ×2 opens it to ±16% for the
 // times a pair genuinely needs more room; it does not change the hidden offset,
@@ -1201,15 +1269,11 @@ const BASE_RANGE = 8;
 // Don't re-add a second pitch mapping without first establishing what is.
 function pitchMap() { return { lo: -pitchRange, hi: pitchRange }; }
 // Zero LAMP, not a detent: nothing snaps (see CLAUDE.md — a detent you can feel
-// is one you can't be precise inside). Sized in BPM, not percent, because 0.1 BPM
-// is the accuracy being trained for and a fixed percentage can't promise that —
-// 0.12% is 0.15 BPM at 126 and 0.21 BPM at 174.
-const DETENT_BPM = 0.09;
-const FALLBACK_BPM = 128;
-function detentPct() {
-  const a = round && tracks.find(t => t.id === round.aId);
-  return (DETENT_BPM / (a?.bpm || FALLBACK_BPM)) * 100;
-}
+// is one you can't be precise inside). Lit within ±0.2% of zero, which is
+// Beatmatch PRO's lamp (its fader reports rate 0.998–1.002 as centre); ours
+// used to be 0.09 BPM, about a third as wide and hard to find.
+const DETENT_PCT = 0.2;
+function detentPct() { return DETENT_PCT; }
 
 function buildScale(id) {
   const scale = $('faderScale' + id);
@@ -1461,6 +1525,7 @@ for (const id of DECKS) {
     set: frac => {
       const { lo, hi } = pitchMap();
       decks[id].fader = +Math.max(-pitchRange, Math.min(pitchRange, lo + frac * (hi - lo))).toFixed(4);
+      if (round && !round.moved) { round.moved = true; revealBtn.disabled = !revealReady(); }
       renderPitch(id);
       applyRate(id);      // AudioParam write — safe on every move, no glitch
     },
@@ -1484,11 +1549,22 @@ bindFader($('xfTrack'), $('xfKnob'), {
 // ---------- Nudge ----------
 // Momentary tempo bend, like a thumb on the platter. 1% was too weak to pull a
 // drifting deck back; the buttons are labelled with the value so it's explicit.
-const NUDGE_PCT = 2.0;
-function bindNudge(btn, id, amount) {
+// Beatmatch PRO bends by 10% (playbackRate ± 0.1), five times what this app
+// shipped with, and that is most of why a drift is quicker to pull back there.
+// It is a setting now: 10 by default, 5 and 2 for a lighter touch.
+const NUDGE_CHOICES = [2, 5, 10];
+function setNudge(v) {
+  nudgePct = NUDGE_CHOICES.includes(v) ? v : 10;
+  [...$('nudgeSeg').children].forEach(b => b.classList.toggle('on', +b.dataset.nudge === nudgePct));
+  for (const id of DECKS) {
+    $('nudgeDown' + id).textContent = `−${nudgePct}%`;
+    $('nudgeUp' + id).textContent = `+${nudgePct}%`;
+  }
+}
+function bindNudge(btn, id, sign) {
   const start = e => {
     e.preventDefault();
-    decks[id].nudge = amount;
+    decks[id].nudge = sign * nudgePct;
     btn.classList.add('held');
     renderPitch(id); applyRate(id);
   };
@@ -1503,8 +1579,8 @@ function bindNudge(btn, id, amount) {
   btn.addEventListener('pointerleave', end);
 }
 for (const id of DECKS) {
-  bindNudge($('nudgeUp' + id), id, NUDGE_PCT);
-  bindNudge($('nudgeDown' + id), id, -NUDGE_PCT);
+  bindNudge($('nudgeUp' + id), id, 1);
+  bindNudge($('nudgeDown' + id), id, -1);
 }
 
 // ---------- Reveal ----------
@@ -1516,52 +1592,50 @@ revealBtn.addEventListener('click', async () => {
   // Everything the card shows is snapshotted BEFORE the awaited IDB write: the
   // mixer is still live during it, and dealing a new pair inside that window
   // printed the NEXT round's hidden offset on the card.
-  const shown = { ...round, faderA: decks.A.fader, faderB: decks.B.fader };
-  const err = currentErrorPct(shown);
-  const absErr = Math.abs(err);
+  const shown = { ...round, faderA: decks.A.fader, faderB: decks.B.fader,
+                  secs: round.t0 !== null ? (performance.now() - round.t0) / 1000 : null };
   const a = tracks.find(t => t.id === shown.aId), b = tracks.find(t => t.id === shown.bId);
-  // Measured against the tempo the pair was actually running at: deck 1's tag
-  // scaled by its own fader, since that fader is live now too.
-  const bpmA = effectiveBpmA(shown);
-  const errBpm = bpmA ? bpmA * err / 100 : null;
-  const absBpm = errBpm !== null ? Math.abs(errBpm) : null;
-  sessionHistory.push({ err, errBpm });
-  await db.saveRound({ err, errBpm, mode, difficulty: shown.difficulty, pitchRange: shown.pitchRange,
+  const err = currentErrorPct(shown);
+  const bpms = deckBpms(shown);
+  const errBpm = bpms.b - bpms.a;                 // signed: positive = deck 2 fast
+  const score = proScore(shown);
+  sessionHistory.push({ err, errBpm, pct: score.pct, stars: score.stars });
+  await db.saveRound({ err, errBpm, pct: score.pct, stars: score.stars, secs: shown.secs,
+                       mode, difficulty: shown.difficulty, material: shown.material, pitchRange: shown.pitchRange,
                        aids: shown.aids || aids,   // an aided round is not an eared one
                        faderA: shown.faderA, faderB: shown.faderB,
                        aName: a?.name, bName: b?.name }).catch(() => {});
+  // Headline as Beatmatch PRO prints it: the score, the % match, the time, the
+  // stars. Colour follows the stars. Our exact BPM off sits underneath.
   const sEl = $('revealScore');
-  if (absBpm !== null) {
-    sEl.textContent = absBpm.toFixed(2);
-    $('revealSub').textContent = 'BPM off';
-    sEl.className = 'reveal-score ' + (absBpm <= 0.05 ? 'good' : absBpm <= 0.3 ? 'mid' : 'bad');
-  } else {
-    sEl.textContent = absErr.toFixed(2) + '%';
-    $('revealSub').textContent = 'tempo off (no BPM tagged for deck 1)';
-    sEl.className = 'reveal-score ' + (absErr <= 0.05 ? 'good' : absErr <= 0.25 ? 'mid' : 'bad');
-  }
-  const dir = err > 0 ? 'fast' : 'slow';
+  sEl.textContent = score.pct.toFixed(3);
+  sEl.className = 'reveal-score ' + starBand(score.stars);
+  $('revealSub').textContent = `${(100 - score.pct).toFixed(3)}% match` + (shown.secs !== null ? ` · ${shown.secs.toFixed(1)} s` : '');
+  $('revealStars').textContent = starText(score.stars);
+  $('revealStars').className = 'reveal-stars ' + starBand(score.stars);
+  $('revealName').textContent = `that's ${score.name}!`;
   const sign = v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
-  // With both faders live the answer is a relationship, not a single position:
-  // deck 2 has to sit wherever cancels the hidden offset relative to deck 1.
-  const correctB = ((1 + shown.faderA / 100) / (1 + shown.hidden / 100) - 1) * 100;
-  const lockNote = (absBpm !== null ? absBpm <= 0.05 : absErr <= 0.05);
-  $('revealDetail').innerHTML =
-    `<span>Deck 2 was</span> ${lockNote ? '<span>locked in</span>' : `running ${dir}`} ` +
-    (absBpm !== null ? `<span>(${absErr.toFixed(2)}% at ${bpmA.toFixed(2)} BPM)</span>` : '') + ` ·
-     <span>hidden offset</span> ${sign(shown.hidden)}% ·
-     <span>your faders</span> 1: ${sign(shown.faderA)}% / 2: ${sign(shown.faderB)}% ·
-     <span>deck 2 needed</span> ${sign(correctB)}%`;
-  const row = $('strobeRow');
-  row.innerHTML = '';
-  for (let i = 0; i < 30; i++) { const dot = document.createElement('div'); dot.className = 'strobe-dot'; row.appendChild(dot); }
-  // The strobe used to lock at ≤0.1 PERCENT while the headline called ≤0.05
-  // BPM good — so at 128 BPM everything from 0.05 to 0.13 BPM showed an amber
-  // "running fast" headline above a green "beat locked". One band, both.
-  row.classList.toggle('locked', lockNote);
-  const driftDur = lockNote ? 0 : Math.max(0.4, 3 / Math.max(absErr, 0.001));
-  row.style.animation = driftDur ? `strobeDrift ${driftDur}s linear infinite ${err > 0 ? '' : 'reverse'}` : 'none';
-  $('strobeCaption').textContent = lockNote ? 'Strobe dots frozen — beat locked' : `Dots drifting ${dir} at your error rate`;
+  const absBpm = Math.abs(errBpm);
+  // Deck 2 has to sit wherever makes its tempo equal deck 1's, given where
+  // deck 1's fader is — a relationship, not one fixed position.
+  const correctB = (bpms.a / (shown.bpmB * shown.r0 * (1 + shown.hidden / 100)) - 1) * 100;
+  const way = absBpm < 0.005 ? 'Deck 2 was dead on'
+    : `Deck 2 was running ${errBpm > 0 ? 'fast' : 'slow'} by ${absBpm.toFixed(2)} BPM`;
+  $('revealBpmOff').textContent = `${absBpm.toFixed(2)} BPM off`;
+  $('revealDetail').textContent = `${way} — its fader needed ${sign(correctB)}%, you had ${sign(shown.faderB)}%.`;
+  // Per deck, as on their card: the track, its original BPM, the BPM you had
+  // it running at. textContent throughout: names are filenames the user picked.
+  const cols = $('revealDecks');
+  cols.textContent = '';
+  for (const [n, t, orig, yours] of [[1, a, shown.bpmA, bpms.a], [2, b, shown.bpmB, bpms.b]]) {
+    const col = document.createElement('div'); col.className = 'reveal-deck';
+    const num = document.createElement('div'); num.className = 'reveal-deck-n'; num.textContent = String(n);
+    const name = document.createElement('div'); name.className = 'reveal-deck-name'; name.textContent = t?.name || '?';
+    const o = document.createElement('div'); o.textContent = `Original ${orig.toFixed(2)}`;
+    const y = document.createElement('div'); y.className = 'reveal-deck-you'; y.textContent = `You ${yours.toFixed(2)} BPM`;
+    col.append(num, name, o, y);
+    cols.appendChild(col);
+  }
   overlay.classList.add('show');
   revealing = false;
   renderHistory();
@@ -1577,9 +1651,7 @@ async function renderHistory() {
   panel.style.display = 'block';
   const list = $('historyList');
   list.innerHTML = '';
-  const fmt = h => h.errBpm !== null && h.errBpm !== undefined
-    ? `${Math.abs(h.errBpm).toFixed(2)} BPM`
-    : `${Math.abs(h.err).toFixed(2)}%`;
+  const fmt = h => `${starText(h.stars)} · ${Math.abs(h.errBpm).toFixed(2)} BPM`;
   [...sessionHistory].reverse().slice(0, 12).forEach((h, i) => {
     const row = document.createElement('div');
     row.className = 'history-row';
@@ -1608,7 +1680,14 @@ let statsFilter = 'all';
 let statsAided = false;         // include rounds played with visual aids
 let statsAsTable = false;
 let statsRows = [];
-const bandOf = abs => abs <= 0.05 ? 'good' : abs <= 0.3 ? 'mid' : 'bad';
+// Every round is charted on Beatmatch PRO's score — percent tempo difference —
+// and coloured by its stars, the same as the reveal. Rounds saved before v34
+// have no pct; |err| is the same quantity to within a rounding (it is taken
+// against deck 1 rather than the mean of the two).
+const pctOf = r => typeof r.pct === 'number' ? r.pct : Math.abs(r.err);
+const starsOf = pct => 5 - Math.min(5, Math.round(pct));
+const bandOf = pct => starBand(starsOf(pct));
+const MODE_LABEL = { natural: 'natural gap', easy: 'wide offset', hard: 'fine offset' };
 function rollingMedian(xs, win) {
   const out = [];
   for (let i = 0; i < xs.length; i++) {
@@ -1633,12 +1712,12 @@ async function renderStats() {
     : '';
   $('statsAidedBtn').style.display = aided ? 'block' : 'none';
   $('statsAidedBtn').textContent = statsAided ? 'Exclude aided rounds' : 'Include aided rounds';
-  const abs = rows.map(r => Math.abs(r.errBpm));
+  const abs = rows.map(pctOf);
   $('kpiRounds').textContent = String(rows.length);
   $('kpiBest').textContent = abs.length ? Math.min(...abs).toFixed(2) : '—';
   const last20 = abs.slice(-20).sort((a, b) => a - b);
   $('kpiMedian').textContent = last20.length ? last20[last20.length >> 1].toFixed(2) : '—';
-  $('kpiLocked').textContent = abs.length ? `${Math.round(100 * abs.filter(a => a <= 0.05).length / abs.length)}%` : '—';
+  $('kpiLocked').textContent = abs.length ? `${Math.round(100 * abs.filter(a => starsOf(a) === 5).length / abs.length)}%` : '—';
   renderStatsTable(rows);
   renderStatsChart(rows, abs);
 }
@@ -1656,9 +1735,9 @@ function renderStatsTable(rows) {
     const who = document.createElement('span');
     who.textContent = `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${r.aName || '?'} / ${r.bName || '?'}`;
     const how = document.createElement('span');
-    how.textContent = `${r.difficulty === 'hard' ? 'fine' : 'wide'} ±${r.pitchRange || 8}`;
+    how.textContent = `${MODE_LABEL[r.difficulty] || 'wide offset'} ±${r.pitchRange || 8}`;
     const val = document.createElement('b');
-    val.textContent = Math.abs(r.errBpm).toFixed(2);
+    val.textContent = `${pctOf(r).toFixed(3)} ${starText(starsOf(pctOf(r)))}`;
     row.append(who, how, val);
     t.appendChild(row);
   });
@@ -1671,17 +1750,17 @@ function renderStatsChart(rows, abs) {
   const W = 320, H = 150, padL = 30, padR = 8, padT = 8, padB = 18;
   const sorted = [...abs].sort((a, b) => a - b);
   const p90 = sorted[Math.floor(sorted.length * 0.9)];
-  const cap = Math.min(2, Math.max(0.3, Math.ceil(p90 * 10) / 10));     // y-axis top; outliers pinned there, hollow
+  const cap = Math.min(5, Math.max(1.5, Math.ceil(p90 * 2) / 2));       // y-axis top; outliers pinned there, hollow
   const x = i => padL + (rows.length === 1 ? 0 : (i / (rows.length - 1)) * (W - padL - padR));
   const y = v => padT + (1 - Math.min(v, cap) / cap) * (H - padT - padB);
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `BPM off per round, ${rows.length} rounds`);
+  svg.setAttribute('aria-label', `Score per round, ${rows.length} rounds`);
   const el = (tag, attrs, parent = svg) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
-  // Grid: the two reveal thresholds and the cap, labelled on the left.
-  for (const v of [0.05, 0.3, cap].filter(v => v <= cap)) {
+  // Grid: the 5★ and 4★ ceilings and the cap, labelled on the left.
+  for (const v of [...new Set([0.5, 1.5, cap])].filter(v => v <= cap)) {
     el('line', { class: 'grid', x1: padL, x2: W - padR, y1: y(v), y2: y(v) });
     const t = el('text', { class: 'axis-t', x: padL - 4, y: y(v) + 3, 'text-anchor': 'end' }); t.textContent = v.toFixed(2);
   }
@@ -1701,9 +1780,9 @@ function renderStatsChart(rows, abs) {
   const show = (i, cx, cy) => {
     const r = rows[i];
     tip.textContent = '';
-    const head = document.createElement('b'); head.textContent = `${Math.abs(r.errBpm).toFixed(2)} BPM off`;
-    tip.append(head, ` · ${r.errBpm > 0 ? 'fast' : 'slow'}`, document.createElement('br'),
-               `${fmt(r.at)} · ${r.difficulty === 'hard' ? 'fine' : 'wide'} offset ±${r.pitchRange || 8}`, document.createElement('br'),
+    const head = document.createElement('b'); head.textContent = `${pctOf(r).toFixed(3)} ${starText(starsOf(pctOf(r)))}`;
+    tip.append(head, ` · ${Math.abs(r.errBpm).toFixed(2)} BPM ${r.errBpm > 0 ? 'fast' : 'slow'}`, document.createElement('br'),
+               `${fmt(r.at)} · ${MODE_LABEL[r.difficulty] || 'wide offset'} ±${r.pitchRange || 8}`, document.createElement('br'),
                r.aName || '?', document.createElement('br'), r.bName || '?');
     tip.hidden = false;
     // Positioned within #statsPanel (position: relative), above and near the dot.
@@ -1715,7 +1794,7 @@ function renderStatsChart(rows, abs) {
     svg.querySelector(`.dot[data-i="${i}"]`)?.classList.add('active');
   };
   rows.forEach((r, i) => {
-    const a = Math.abs(r.errBpm), capped = a > cap;
+    const a = abs[i], capped = a > cap;
     const cx = x(i), cy = y(a);
     el('circle', { class: `dot ${capped ? 'capped' : bandOf(a)}`, cx: cx.toFixed(1), cy: cy.toFixed(1), r: 3.5, 'data-i': i });
     const hit = el('circle', { class: 'hit', cx: cx.toFixed(1), cy: cy.toFixed(1), r: 10 });
@@ -1740,13 +1819,38 @@ $('statsTableBtn').addEventListener('click', () => {
 
 // ---------- Settings ----------
 function setDifficulty(v) {
-  difficulty = v === 'hard' ? 'hard' : 'easy';
+  difficulty = ['natural', 'easy', 'hard'].includes(v) ? v : 'natural';
   [...$('diffSeg').children].forEach(b => b.classList.toggle('on', b.dataset.diff === difficulty));
 }
 $('diffSeg').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn) return;
   setDifficulty(btn.dataset.diff);
-  db.setSetting('difficulty', difficulty).catch(() => {});   // a mode, not a per-launch reset
+  // Stored as 'setup', not the old 'difficulty' key: a phone that used v33
+  // has 'easy' saved there and would never see the new default.
+  db.setSetting('setup', difficulty).catch(() => {});
+  // The round on the decks was dealt under the old setup; deal one under the
+  // new, unless something is playing.
+  if (!decks.A.playing && !decks.B.playing && canStart()) startRound(true);
+});
+$('materialSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  setMaterial(btn.dataset.material);
+  db.setSetting('material', material).catch(() => {});
+  if (!decks.A.playing && !decks.B.playing && canStart()) startRound(true);
+});
+function setMaterial(v) {
+  material = v === 'top' ? 'top' : 'loop';
+  [...$('materialSeg').children].forEach(b => b.classList.toggle('on', b.dataset.material === material));
+}
+$('nudgeSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  setNudge(+btn.dataset.nudge);
+  db.setSetting('nudge', nudgePct).catch(() => {});
+});
+$('metersSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  setMeters(btn.dataset.meters === 'on');
+  db.setSetting('meters', meters).catch(() => {});
 });
 $('aidsSeg').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn) return;
@@ -1774,7 +1878,7 @@ function updateButtons() {
   // Reveal needs a loaded pair: it was live the instant a pair was dealt, so a
   // mis-tap wrote a round whose "error" was the whole hidden offset into a
   // history that cannot be edited.
-  revealBtn.disabled = !round || !decks.A.ready || !decks.B.ready;
+  revealBtn.disabled = !revealReady();
   $('dropBtn').disabled = !round;
 }
 
@@ -1806,7 +1910,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v33';
+const APP_BUILD = 'bmt-v34';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -1885,6 +1989,8 @@ if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
     get ctx() { return ctx; }, get master() { return master; },
     get round() { return round && { ...round }; },            // copy: writes must not reach the round
     get tracks() { return tracks; }, get xfade() { return xfade; }, get aids() { return aids; },
+    get meters() { return meters; }, get nudgePct() { return nudgePct; }, get material() { return material; },
+    deckBpms, proScore, topStart, toastLog,
     decks, rateFor, phraseStart, deckGain, loadDeck, loopRegion, pitchMap, syncDemoCrate,
   };
 }
@@ -1895,7 +2001,10 @@ async function init() {
   try { setSplit(await db.getSetting('split', false)); } catch {}
   try { setBeatFocus(await db.getSetting('beatFocus', false)); } catch {}
   try { setAids(await db.getSetting('aids', false) === true); } catch {}
-  try { setDifficulty(await db.getSetting('difficulty', 'easy')); } catch {}
+  try { setMeters(await db.getSetting('meters', true) !== false); } catch {}
+  try { setDifficulty(await db.getSetting('setup', 'natural')); } catch {}
+  try { setMaterial(await db.getSetting('material', 'loop')); } catch {}
+  try { setNudge(await db.getSetting('nudge', 10)); } catch { setNudge(10); }
   try { setPitchRange(await db.getSetting('pitchRange', BASE_RANGE) === BASE_RANGE * 2 ? BASE_RANGE * 2 : BASE_RANGE); }
   catch { setPitchRange(BASE_RANGE); }
   try { const x = await db.getSetting('xfade', 0.5); if (typeof x === 'number' && x >= 0 && x <= 1) xfade = x; } catch {}

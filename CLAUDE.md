@@ -5,6 +5,40 @@ A personal PWA for practising DJ beatmatching by ear, inspired by Beatmatch PRO
 but using the owner's own music library, with unlimited practice rounds and full
 offline support. Deployed on GitHub Pages, installed to iPhone home screen.
 
+## Beatmatch PRO is the reference — v34 closed the gap (2026-11-14)
+Beatmatch PRO is a web app (beatmatch.pro; the Android app wraps it), so its
+mechanics were READ FROM ITS CLIENT CODE rather than guessed. The owner then
+chose, difference by difference, which side to take. Where a section further
+down this file disagrees with this one, this one wins.
+- SCORE: theirs. 100·|bpm1−bpm2| / mean, to 3 dp, "% match", and stars =
+  5 − round(score), so 5★ is under 0.5%. Headline and stars share ONE colour
+  band (5★ green, 3-4★ amber, below red); "N.NN BPM off" sits underneath.
+  The old bands (green ≤ 0.05 BPM, red above 0.3) were ~12× stricter than
+  theirs at the top and are the main reason the owner "could get very close on
+  Beatmatch PRO" but not here. Fed with EXACT decimal BPMs — theirs rounds the
+  detected BPM to an integer, the one thing the owner chose not to copy.
+- ROUND SETUP: 'natural' is the default — two tracks at their own tempos, both
+  faders at 0, r0 = 1, hidden = 0, pairs with under 0.5% gap avoided. The wide
+  and fine hidden-offset rounds remain as options. Setting key is 'setup' (the
+  old 'difficulty' key held 'easy' on existing phones and would have hidden the
+  new default). round.difficulty is 'natural' | 'easy' | 'hard'.
+- NUDGE: a setting, 2 / 5 / 10%, default 10 (theirs adds ±0.1 to playbackRate).
+- MATERIAL: 'loop' (default) or 'top' — the first 90 s from the first downbeat,
+  played once, which is theirs. Practice beats always loop.
+- METERS on by default with their own switch; WAVEFORMS stay opt-in and are
+  what marks a round as aided. Both off = no analyser, no rAF loop.
+- FLOW: Reveal is disabled until a pitch fader has moved; a clock runs from
+  both decks having been played (Play or Cue) to Reveal and is shown and saved.
+- REVEAL CARD: per deck the track, original BPM and the BPM you had it at, plus
+  one line on which way deck 2 was out. The strobe dots are gone.
+- ZERO LAMP: lit within ±0.2% (theirs), not 0.09 BPM. Still no snap. Their
+  vibration at zero cannot work in iOS Safari.
+- Kept from this app: crossfader, Beat focus, looping, pitch readouts, exact
+  BPMs. NOT built: daily challenge, gain knobs.
+- Progress charts the score (percent), coloured by stars; rounds saved before
+  v34 have no pct and fall back to |err|.
+Full notes on their app are in the session memory file beatmatch-pro-mechanics.
+
 ## Owner context
 - DJ setup: 2× Technics SL-1210 MK2, Allen & Heath Xone:PX5, Rekordbox library.
 - The ±8% pitch fader range and pitch-changes-key behaviour are deliberate:
@@ -271,7 +305,8 @@ which made that band 9.6 px.
 The owner removed it anyway: "Beatmatch PRO doesn't have that and somehow it
 works ok." That is the decisive fact — the competitor has one pitch mapping and
 is not hard to score well on, so a 1.3-px band is NOT what makes this app
-harder than it. Whatever the real difference is has not been found yet; do not
+harder than it. The real difference was found on 2026-11-14 (their scoring
+bands and 10% nudge — see the top of this file); do not
 re-add a second pitch mapping (vernier, selectable range, zoomed scale) as a
 way of papering over it. The ±8% default and the ×2 button are unchanged, and
 fine-drag — sliding sideways while dragging — is a DIFFERENT, older feature

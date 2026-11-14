@@ -64,7 +64,14 @@ try {
   await page.screenshot({ path: path.join(out, 'sheet.png'), fullPage: false });
   await page.evaluate(() => document.querySelector('.sheet-body').scrollTo(0, 99999)); await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(out, 'sheet2.png') });
+  // Reveal is dark until a pitch fader has moved: drag deck 2's knob a little.
+  const nudgeFader = async () => {
+    const k = await page.locator('#faderKnobB').boundingBox();
+    await page.mouse.move(k.x + k.width / 2, k.y + k.height / 2); await page.mouse.down();
+    await page.mouse.move(k.x + k.width / 2, k.y + k.height / 2 + 9, { steps: 4 }); await page.mouse.up();
+  };
   await page.click('#sheetClose'); await page.waitForTimeout(200);
+  await nudgeFader();
   await page.click('#revealBtn'); await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(out, 'reveal.png') });
   // Visual aids on, both decks playing.
@@ -77,6 +84,7 @@ try {
   await page.dispatchEvent('#playB', 'pointerdown', { pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: path.join(out, 'aids.png') });
+  await nudgeFader();
   await page.click('#revealBtn'); await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(out, 'reveal-aids.png') });
   console.log('shots in', out);

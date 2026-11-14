@@ -14,7 +14,7 @@
 <!-- ?v= is the build stamp: Safari kept a cached app.js across reloads on the
      phone, and a versioned URL is the only reload-proof way to invalidate it.
      Bump alongside APP_BUILD and the sw.js CACHE. -->
-<link rel="stylesheet" href="css/app.css?v=bmt-v33">
+<link rel="stylesheet" href="css/app.css?v=bmt-v34">
 </head>
 <body>
 <div class="app">
@@ -30,10 +30,10 @@
   <div class="decks">
 
     <section class="channel" data-deck="A">
-      <!-- Visual aids (Beatmatch PRO-style), hidden unless the setting is on -->
+      <!-- Waveform: an opt-in visual aid, hidden unless the setting is on -->
       <canvas class="wave" id="waveA" hidden></canvas>
       <div class="ch-faders">
-        <div class="meter" id="meterA" hidden><div class="meter-fill"></div><div class="meter-mask" id="meterMaskA"></div></div>
+        <div class="meter" id="meterA"><div class="meter-fill"></div><div class="meter-mask" id="meterMaskA"></div></div>
         <div class="fader-unit">
           <div class="fader-track pitch-track" id="faderTrackA">
             <div class="fader-scale" id="faderScaleA"></div>
@@ -45,8 +45,8 @@
       </div>
 
       <div class="ch-nudge">
-        <button class="nudge-btn" id="nudgeDownA" aria-label="Nudge deck 1 slower">&minus;2%</button>
-        <button class="nudge-btn" id="nudgeUpA" aria-label="Nudge deck 1 faster">+2%</button>
+        <button class="nudge-btn" id="nudgeDownA" aria-label="Nudge deck 1 slower">&minus;10%</button>
+        <button class="nudge-btn" id="nudgeUpA" aria-label="Nudge deck 1 faster">+10%</button>
       </div>
 
       <div class="ch-transport">
@@ -57,10 +57,10 @@
     </section>
 
     <section class="channel" data-deck="B">
-      <!-- Visual aids (Beatmatch PRO-style), hidden unless the setting is on -->
+      <!-- Waveform: an opt-in visual aid, hidden unless the setting is on -->
       <canvas class="wave" id="waveB" hidden></canvas>
       <div class="ch-faders">
-        <div class="meter" id="meterB" hidden><div class="meter-fill"></div><div class="meter-mask" id="meterMaskB"></div></div>
+        <div class="meter" id="meterB"><div class="meter-fill"></div><div class="meter-mask" id="meterMaskB"></div></div>
         <div class="fader-unit">
           <div class="fader-track pitch-track" id="faderTrackB">
             <div class="fader-scale" id="faderScaleB"></div>
@@ -72,8 +72,8 @@
       </div>
 
       <div class="ch-nudge">
-        <button class="nudge-btn" id="nudgeDownB" aria-label="Nudge deck 2 slower">&minus;2%</button>
-        <button class="nudge-btn" id="nudgeUpB" aria-label="Nudge deck 2 faster">+2%</button>
+        <button class="nudge-btn" id="nudgeDownB" aria-label="Nudge deck 2 slower">&minus;10%</button>
+        <button class="nudge-btn" id="nudgeUpB" aria-label="Nudge deck 2 faster">+10%</button>
       </div>
 
       <div class="ch-transport">
@@ -136,20 +136,43 @@
     </div>
 
     <div class="panel">
-      <div class="panel-label">Mode</div>
+      <div class="panel-label">Round</div>
       <div class="settings-row">
         <div class="seg" id="diffSeg">
-          <button data-diff="easy" class="on">Wide offset</button>
+          <button data-diff="natural" class="on">Natural gap</button>
+          <button data-diff="easy">Wide offset</button>
           <button data-diff="hard">Fine offset</button>
+        </div>
+      </div>
+      <div class="setting-hint">Natural gap is how Beatmatch PRO deals a round: two tracks at their own tempos, both faders at zero, and you close the real difference between them. The offset rounds pre-match the pair and hide a shift on deck 2 &mdash; wide is 2&ndash;6%, fine is 0.5&ndash;2.5%.</div>
+      <div class="settings-row" style="margin-top:8px;">
+        <div class="seg" id="materialSeg">
+          <button data-material="loop" class="on">Looped section</button>
+          <button data-material="top">From the top, 90&nbsp;s</button>
+        </div>
+      </div>
+      <div class="setting-hint">Looped plays a stretch where the beat never drops out, round and round. From the top is Beatmatch PRO's way: the first 90 seconds from the first downbeat, intro and breakdowns included, played once. Practice beats have no intro and always loop.</div>
+      <div class="settings-row" style="margin-top:8px;">
+        <div class="seg" id="nudgeSeg">
+          <button data-nudge="2">Nudge 2%</button>
+          <button data-nudge="5">Nudge 5%</button>
+          <button data-nudge="10" class="on">Nudge 10%</button>
+        </div>
+      </div>
+      <div class="setting-hint">How hard the nudge buttons bend the tempo while held. 10% is Beatmatch PRO's and pulls a drifting beat back fast; 2% is closer to a light touch on the platter.</div>
+      <div class="settings-row" style="margin-top:8px;">
+        <div class="seg" id="metersSeg">
+          <button data-meters="on" class="on">Meters on</button>
+          <button data-meters="off">Meters off</button>
         </div>
       </div>
       <div class="settings-row" style="margin-top:8px;">
         <div class="seg" id="aidsSeg">
-          <button data-aids="off" class="on">Ears only</button>
-          <button data-aids="on">Visual aids</button>
+          <button data-aids="off" class="on">No waveforms</button>
+          <button data-aids="on">Waveforms</button>
         </div>
       </div>
-      <div class="setting-hint">Visual aids adds what Beatmatch PRO puts on screen: level meters and scrolling waveforms with the beat grid. No BPM is ever shown while you play, and the reveal still reports the one number that matters — how many BPM you were out. Ears only is the honest default: with meters and waveforms you can line the kicks up by eye.</div>
+      <div class="setting-hint">Level meters are on by default, as in Beatmatch PRO. Waveforms scroll each deck's audio past the playhead with the beat grid &mdash; Beatmatch PRO has none, and with them you can line the kicks up by eye, so rounds played with them are kept out of your progress unless you ask. No BPM is ever shown while you play.</div>
       <div class="settings-row" style="margin-top:8px;">
         <div class="seg" id="splitSeg">
           <button data-split="off" class="on">Both centred</button>
@@ -158,7 +181,7 @@
         <button class="range-btn" id="rangeBtn" aria-pressed="false"
                 aria-label="Pitch fader range, tap to double">&plusmn;8%</button>
       </div>
-      <div class="setting-hint">Split pans deck 1 hard left and deck 2 hard right — one ear on the monitor, like cueing on the mixer. &times;2 opens both pitch faders to &plusmn;16% when a pair needs the room. Hold nudge to bend tempo like touching the platter. Cue: tap while playing to jump back to the start, or hold while stopped to preview. Grab the pitch knob and drag; slide well sideways while dragging for fine control (the readout turns amber).</div>
+      <div class="setting-hint">Split pans deck 1 hard left and deck 2 hard right — one ear on the monitor, like cueing on the mixer. &times;2 opens both pitch faders to &plusmn;16% when a pair needs the room. Cue: tap while playing to jump back to the start, or hold while stopped to preview. Grab the pitch knob and drag; slide well sideways while dragging for fine control (the readout turns amber). Reveal lights up once you have moved a fader, and the clock runs from the moment both decks have been played.</div>
       <button class="detect-btn" id="dropBtn" disabled style="margin-top:12px;">Drop both decks together</button>
       <div class="setting-hint">Fallback: starts both decks on one audio-clock tick, phrase-aligned. Real decks are started one at a time with Play and Cue, which is what the mixer screen is for.</div>
     </div>
@@ -169,13 +192,14 @@
         <div class="kpi"><div class="kpi-v" id="kpiRounds">0</div><div class="kpi-l">rounds</div></div>
         <div class="kpi"><div class="kpi-v" id="kpiBest">—</div><div class="kpi-l">best</div></div>
         <div class="kpi"><div class="kpi-v" id="kpiMedian">—</div><div class="kpi-l">median &middot; 20</div></div>
-        <div class="kpi"><div class="kpi-v" id="kpiLocked">—</div><div class="kpi-l">locked</div></div>
+        <div class="kpi"><div class="kpi-v" id="kpiLocked">—</div><div class="kpi-l">5 stars</div></div>
       </div>
       <div class="settings-row" style="margin-top:10px;">
         <div class="seg" id="statsSeg">
           <button data-stats="all" class="on">All</button>
-          <button data-stats="easy">Wide offset</button>
-          <button data-stats="hard">Fine offset</button>
+          <button data-stats="natural">Natural</button>
+          <button data-stats="easy">Wide</button>
+          <button data-stats="hard">Fine</button>
         </div>
         <button class="range-btn" id="statsTableBtn" aria-pressed="false" aria-label="Show as table">Table</button>
       </div>
@@ -184,7 +208,7 @@
       <div class="chart-wrap" id="statsChart"></div>
       <div class="chart-tip" id="statsTip" hidden></div>
       <div class="stats-table" id="statsTable" hidden></div>
-      <div class="setting-hint" id="statsHint">Every round you reveal, oldest to newest. Dots are BPM off, coloured like the reveal (green &le;0.05, amber &le;0.3, red above); the line is the rolling median of the last ten. Tap a dot for the pair.</div>
+      <div class="setting-hint" id="statsHint">Every round you reveal, oldest to newest. Dots are the score &mdash; percent tempo difference, lower is better &mdash; coloured like the reveal (green 5 stars, under 0.5; amber 3&ndash;4 stars; red below); the line is the rolling median of the last ten. Tap a dot for the pair.</div>
     </div>
 
     <div class="panel" id="historyPanel" style="display:none;">
@@ -212,11 +236,11 @@
 <div class="overlay" id="overlay">
   <div class="reveal-card">
     <div class="reveal-score" id="revealScore">0</div>
-    <div class="reveal-sub" id="revealSub">BPM off</div>
-    <div class="strobe-band">
-      <div class="strobe-row" id="strobeRow"></div>
-    </div>
-    <div class="strobe-caption" id="strobeCaption"></div>
+    <div class="reveal-sub" id="revealSub">% match</div>
+    <div class="reveal-stars" id="revealStars"></div>
+    <div class="reveal-name" id="revealName"></div>
+    <div class="reveal-bpm" id="revealBpmOff"></div>
+    <div class="reveal-decks" id="revealDecks"></div>
     <div class="reveal-detail" id="revealDetail"></div>
     <div class="actions" style="margin-top:22px;">
       <button class="btn-secondary" id="retryBtn">Same pair again</button>
@@ -227,6 +251,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=bmt-v33"></script>
+<script type="module" src="js/app.js?v=bmt-v34"></script>
 </body>
 </html>

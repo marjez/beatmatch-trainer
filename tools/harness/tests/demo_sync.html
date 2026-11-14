@@ -60,7 +60,10 @@ try {
   clearInterval(watch);
   const all = bmt.tracks;
   R.after = all.map(t => ({ name: t.name, credit: !!t.credit, loop: [t.loopStart, t.loopEnd] }));
-  R.toast = toasts.find(t => /Demo crate updated/.test(t)) || toasts.join(' | ');
+  // The app's own log is the reliable record: polling the element every 5 ms
+  // still lost the sync toast about one run in four, when the failed decode of
+  // the seeded silent blobs toasted over it inside a single poll interval.
+  R.toast = [...bmt.toastLog, ...toasts].find(t => /Demo crate updated/.test(t)) || toasts.join(' | ');
 
   for (const t of keep) {
     const rec = all.find(x => x.name === t.name && x.credit);
