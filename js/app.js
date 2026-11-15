@@ -2,7 +2,7 @@
 // Two decks at their own tempos (or a hidden offset on deck B), ±8% pitch
 // fader, hold-to-nudge, score on reveal. Crate and stats persist via IndexedDB (db.js).
 
-import * as db from './db.js?v=bmt-v35';   // versioned like index.html's script tag
+import * as db from './db.js?v=bmt-v36';   // versioned like index.html's script tag
 
 'use strict';
 
@@ -100,22 +100,42 @@ function kickAudio(c) {
 function unlockAudioOnFirstTouch() {
   const EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
   const ACTIVATING = new Set(['pointerup', 'touchend', 'click', 'keydown']);
-  let kicked = false;
+  // The unlock is RE-ARMED, never retired. It used to remove its listeners
+  // once the context ran, and then nothing could bring the audio back when iOS
+  // took it away mid-session: pulling down Control Centre for airplane mode,
+  // Bluetooth headphones dropping (airplane mode switches Bluetooth off), a
+  // call, Siri. The context came back suspended / interrupted — or 'running'
+  // and silent, the v19 trap again — and Play did nothing until the app was
+  // killed. Reported as "doesn't play in airplane mode" (2026-11-15).
+  let needKick = true, watched = null;
+  const rearm = () => { needKick = true; };
   const unlock = e => {
+    if (!needKick && ctx && ctx.state === 'running') return;   // the normal press: one flag read
     ensureMaster();
     for (const id of DECKS) ensureChain(id);
-    if (ctx && ACTIVATING.has(e.type)) { kickAudio(ctx); kicked = true; }
-    if (ctx && ctx.state === 'running' && kicked) for (const ev of EVENTS) document.removeEventListener(ev, unlock, true);
+    if (ctx && ctx !== watched) {
+      watched = ctx;
+      ctx.addEventListener('statechange', () => { if (ctx.state !== 'running') rearm(); });
+    }
+    if (ctx && ACTIVATING.has(e.type)) {
+      if (ctx.state !== 'running') ctx.resume().catch(() => {});
+      kickAudio(ctx);
+      if (ctx.state === 'running') needKick = false;
+    }
   };
   for (const ev of EVENTS) document.addEventListener(ev, unlock, true);
-  // A phone call, Siri or a trip to the switcher leaves the context suspended
-  // or (Safari) interrupted; coming back should not cost the next press a
-  // resume. Also refresh the transport, since sources may have been dropped.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden || !ctx) return;
+  // Coming back from anywhere the audio session may have been taken: resume
+  // now if the browser allows it, and re-arm so the next touch kicks it too.
+  const back = () => {
+    rearm();
+    if (!ctx) return;
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
     updateTransport();
-  });
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) back(); });
+  window.addEventListener('pageshow', back);
+  window.addEventListener('focus', back);
+  try { navigator.mediaDevices?.addEventListener?.('devicechange', rearm); } catch {}
 }
 
 // ---------- Master bus ----------
@@ -1948,7 +1968,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') openSheet(fa
 // ---------- Service worker ----------
 // Bump alongside sw.js CACHE. Shown in the sheet so "which build am I running?"
 // is answerable from the phone instead of guessed at.
-const APP_BUILD = 'bmt-v35';
+const APP_BUILD = 'bmt-v36';
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;

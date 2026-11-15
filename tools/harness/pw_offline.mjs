@@ -78,6 +78,13 @@ try {
   const state = await page.evaluate(() => ({ playing: window.__bmt.decks.A.playing, ctx: window.__bmt.ctx && window.__bmt.ctx.state, t: window.__bmt.ctx && window.__bmt.ctx.currentTime }));
   if (!state.playing) fail('deck A not playing offline');
   if (state.ctx !== 'running') fail('context not running offline: ' + state.ctx);
+  // iOS takes the audio session away mid-session (Control Centre, Bluetooth
+  // dropping with airplane mode, a call). The next touch must bring it back.
+  await page.evaluate(() => window.__bmt.ctx.suspend());
+  for (const ev of ['pointerdown', 'pointerup']) await page.dispatchEvent('#focusBtn', ev, { pointerId: 2, pointerType: 'touch', isPrimary: true, bubbles: true });
+  await page.waitForTimeout(300);
+  const back = await page.evaluate(() => window.__bmt.ctx.state);
+  if (back !== 'running') fail('context stayed ' + back + ' after an interruption and a touch');
   const localFailures = failedRequests.filter(u => u.startsWith(`http://127.0.0.1:${port}/`) && !u.includes('/crate/'));
   if (localFailures.length) fail('shell requests failed offline: ' + localFailures.join(', '));
   R.offlineReload = { tracks: tracksOffline, ...state, fontRequestsFailed: failedRequests.filter(u => u.includes('fonts.g')).length };
